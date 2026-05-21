@@ -43,7 +43,7 @@ function TablesPage() {
       const { data: o } = await supabase
         .from("orders")
         .select("table_id,total,status")
-        .in("status", ["pending", "preparing", "ready", "served"]);
+        .in("status", ["pending", "cooking", "ready"]);
       if (o) {
         const map: Record<string, number> = {};
         for (const row of o as OrderTotal[]) {
