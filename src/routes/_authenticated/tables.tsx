@@ -39,7 +39,15 @@ function TablesPage() {
   useEffect(() => {
     const load = async () => {
       const { data } = await supabase.from("tables").select("*").order("number");
-      if (data) setTables(data as TableRow[]);
+      if (data) {
+        const sorted = [...(data as TableRow[])].sort((a, b) => {
+          const an = parseInt(a.number, 10);
+          const bn = parseInt(b.number, 10);
+          if (!isNaN(an) && !isNaN(bn)) return an - bn;
+          return a.number.localeCompare(b.number);
+        });
+        setTables(sorted);
+      }
       const { data: o } = await supabase
         .from("orders")
         .select("table_id,total,status")
