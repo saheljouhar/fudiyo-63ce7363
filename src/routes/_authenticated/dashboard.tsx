@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
@@ -10,7 +10,6 @@ import {
   Grid3x3, IndianRupee, ShoppingCart, TrendingUp, RefreshCcw, Calendar,
 } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -286,6 +285,3 @@ function SetupGrid() {
     </div>
   );
 }
-
-// Avoid unused warning for toast import (kept for future)
-void toast;
