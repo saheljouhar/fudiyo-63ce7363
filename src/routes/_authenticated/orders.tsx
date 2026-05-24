@@ -83,7 +83,7 @@ function OrdersPage() {
       table_id: tableId ?? null,
       waiter_id: user?.id,
       waiter_name: name,
-      items: cart as unknown as Record<string, unknown>[],
+      items: JSON.parse(JSON.stringify(cart)),
       subtotal, tax, total, discount: 0,
       order_type: orderType,
       status: "pending",
