@@ -107,6 +107,15 @@
   --kitchen-card: oklch(0.27 0.034 260);
 
   --radius: 8px;
+
+  /* Brand icon tile colors (per ORBIS spec) */
+  --tile-purple: #7C3AED;
+  --tile-green: #16A34A;
+  --tile-blue: #2563EB;
+  --tile-amber: #D97706;
+  --tile-cyan: #0891B2;
+  --tile-red: #DC2626;
+  --tile-gray: #6B7280;
 }
 
 @layer base {

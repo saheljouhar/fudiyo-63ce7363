@@ -48,12 +48,15 @@ export function Sidebar() {
                   <TooltipTrigger asChild>
                     <Link
                       to={item.to}
-                      className={`group size-10 rounded-lg flex items-center justify-center transition-colors ${
+                      className={`group relative size-10 rounded-lg flex items-center justify-center transition-colors ${
                         active
-                          ? "bg-sidebar-active text-sidebar-active-foreground"
-                          : "text-sidebar-icon hover:bg-sidebar-active/60 hover:text-sidebar-active-foreground"
+                          ? "bg-sidebar-active text-white"
+                          : "text-sidebar-icon hover:bg-sidebar-active/60 hover:text-white"
                       }`}
                     >
+                      {active && (
+                        <span className="absolute left-[-12px] top-1.5 bottom-1.5 w-[3px] rounded-r bg-primary" />
+                      )}
                       <Icon className="size-5" />
                     </Link>
                   </TooltipTrigger>
