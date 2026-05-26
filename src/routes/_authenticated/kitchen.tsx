@@ -96,9 +96,9 @@ function KitchenPage() {
 
   const counts = useMemo(() => ({
     new: orders.filter((o) => o.status === "pending").length,
-    cooking: orders.filter((o) => o.status === "preparing").length,
+    cooking: orders.filter((o) => o.status === "cooking").length,
     ready: orders.filter((o) => o.status === "ready").length,
-    done: orders.filter((o) => o.status === "served").length,
+    done: orders.filter((o) => o.status === "billed").length,
   }), [orders]);
 
   const visible = orders.filter((o) => o.status === TAB_TO_STATUS[tab]);
@@ -107,7 +107,7 @@ function KitchenPage() {
     const next: Status = o.status === "pending" ? "cooking" : o.status === "cooking" ? "ready" : "billed";
     const { error } = await supabase.from("orders").update({ status: next }).eq("id", o.id);
     if (error) { toast.error(error.message); return; }
-    if (next === "served") {
+    if (next === "billed") {
       await supabase.from("notifications").insert({ type: "order_ready" as never, message: `Order ready for pickup` });
     }
   };
