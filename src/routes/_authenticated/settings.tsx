@@ -8,5 +8,5 @@ export const Route = createFileRoute("/_authenticated/settings")({
       <ComingSoon title="Settings" blurb="Six tabs including EN / ML language toggle — coming in Phase 4." />
     </main>
   ),
-  head: () => ({ meta: [{ title: "Settings — ORBIS" }] }),
+  head: () => ({ meta: [{ title: "Settings — Fudiyo" }] }),
 });

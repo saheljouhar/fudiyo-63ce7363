@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth";
 export const Route = createFileRoute("/_authenticated/orders")({
   validateSearch: (s: Record<string, unknown>) => ({ table: (s.table as string) ?? undefined }),
   component: OrdersPage,
-  head: () => ({ meta: [{ title: "Orders — ORBIS" }] }),
+  head: () => ({ meta: [{ title: "Orders — Fudiyo" }] }),
 });
 
 interface Dish { id: string; name: string; category: string; price: number; is_available: boolean; description: string | null; photo_url: string | null; restaurant_id: string }

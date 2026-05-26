@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/staff")({
   component: StaffPage,
-  head: () => ({ meta: [{ title: "Staff — ORBIS" }] }),
+  head: () => ({ meta: [{ title: "Staff — Fudiyo" }] }),
 });
 
 type Tab = "accounts" | "attendance" | "shifts";

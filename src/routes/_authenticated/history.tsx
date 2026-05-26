@@ -9,5 +9,5 @@ export const Route = createFileRoute("/_authenticated/history")({
       <ComingSoon title="Order History" blurb="Pending bills, split bill, void with reason — coming in Phase 2." />
     </main>
   ),
-  head: () => ({ meta: [{ title: "History — ORBIS" }] }),
+  head: () => ({ meta: [{ title: "History — Fudiyo" }] }),
 });

@@ -20,7 +20,7 @@ interface OrderTotal { table_id: string | null; total: number }
 
 export const Route = createFileRoute("/_authenticated/tables")({
   component: TablesPage,
-  head: () => ({ meta: [{ title: "Tables — ORBIS" }] }),
+  head: () => ({ meta: [{ title: "Tables — Fudiyo" }] }),
 });
 
 function TablesPage() {
@@ -111,7 +111,7 @@ function TablesPage() {
     <main className="p-6 max-w-[1600px] mx-auto">
       <PageHeader
         title="Table Management"
-        subtitle="ORBIS Kitchen"
+        subtitle="Fudiyo Kitchen"
         actions={
           <>
             <Button variant="outline" size="sm"><CalendarPlus /> Book</Button>

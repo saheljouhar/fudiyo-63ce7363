@@ -8,5 +8,5 @@ export const Route = createFileRoute("/_authenticated/kitchen")({
       <ComingSoon title="Kitchen" blurb="Dark theme KDS with status tabs, real-time flash + beep, wake lock — coming in Phase 2." />
     </main>
   ),
-  head: () => ({ meta: [{ title: "Kitchen — ORBIS" }] }),
+  head: () => ({ meta: [{ title: "Kitchen — Fudiyo" }] }),
 });

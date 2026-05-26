@@ -8,5 +8,5 @@ export const Route = createFileRoute("/_authenticated/reports")({
       <ComingSoon title="Reports" blurb="9 report types with export — coming in Phase 4." />
     </main>
   ),
-  head: () => ({ meta: [{ title: "Reports — ORBIS" }] }),
+  head: () => ({ meta: [{ title: "Reports — Fudiyo" }] }),
 });

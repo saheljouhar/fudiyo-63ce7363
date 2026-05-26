@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/menu")({
   component: MenuPage,
-  head: () => ({ meta: [{ title: "Menu — ORBIS" }] }),
+  head: () => ({ meta: [{ title: "Menu — Fudiyo" }] }),
 });
 
 interface Dish {
@@ -77,7 +77,7 @@ function MenuPage() {
     <main className="p-6 max-w-[1500px] mx-auto">
       <PageHeader
         title="Menu Management"
-        subtitle={`${dishes.length} items · ORBIS Kitchen`}
+        subtitle={`${dishes.length} items · Fudiyo Kitchen`}
         actions={
           <button onClick={() => setEditing({})} className="h-9 px-4 inline-flex items-center gap-2 rounded-md bg-cta text-cta-foreground text-sm font-semibold hover:bg-cta-hover">
             <Plus className="size-4" /> Add New Dish

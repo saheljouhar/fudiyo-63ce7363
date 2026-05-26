@@ -8,5 +8,5 @@ export const Route = createFileRoute("/_authenticated/bookings")({
       <ComingSoon title="Bookings" blurb="Calendar view, customer details, table assignment — coming in Phase 4." />
     </main>
   ),
-  head: () => ({ meta: [{ title: "Bookings — ORBIS" }] }),
+  head: () => ({ meta: [{ title: "Bookings — Fudiyo" }] }),
 });
