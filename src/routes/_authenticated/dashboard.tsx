@@ -13,7 +13,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContai
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
-  head: () => ({ meta: [{ title: "Dashboard — ORBIS" }] }),
+  head: () => ({ meta: [{ title: "Dashboard — Fudiyo" }] }),
 });
 
 type Tab = "overview" | "staff" | "menu" | "inventory" | "setup" | "reports";

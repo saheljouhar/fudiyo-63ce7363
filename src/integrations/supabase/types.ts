@@ -144,6 +144,30 @@ export type Database = {
           },
         ]
       }
+      dish_availability_log: {
+        Row: {
+          dish_id: string
+          dish_name: string
+          id: string
+          toggled_off_at: string
+          toggled_on_at: string | null
+        }
+        Insert: {
+          dish_id: string
+          dish_name: string
+          id?: string
+          toggled_off_at?: string
+          toggled_on_at?: string | null
+        }
+        Update: {
+          dish_id?: string
+          dish_name?: string
+          id?: string
+          toggled_off_at?: string
+          toggled_on_at?: string | null
+        }
+        Relationships: []
+      }
       dishes: {
         Row: {
           category: string
@@ -203,6 +227,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      inventory_items: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          low_stock_threshold: number
+          name: string
+          quantity: number
+          restaurant_id: string | null
+          supplier: string | null
+          unit: string
+          unit_cost: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          id?: string
+          low_stock_threshold?: number
+          name: string
+          quantity?: number
+          restaurant_id?: string | null
+          supplier?: string | null
+          unit?: string
+          unit_cost?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          low_stock_threshold?: number
+          name?: string
+          quantity?: number
+          restaurant_id?: string | null
+          supplier?: string | null
+          unit?: string
+          unit_cost?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       notifications: {
         Row: {
@@ -599,6 +665,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      waste_log: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string | null
+          item_name: string
+          logged_by: string | null
+          quantity: number
+          reason: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id?: string | null
+          item_name: string
+          logged_by?: string | null
+          quantity: number
+          reason: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string | null
+          item_name?: string
+          logged_by?: string | null
+          quantity?: number
+          reason?: string
+        }
+        Relationships: []
       }
     }
     Views: {

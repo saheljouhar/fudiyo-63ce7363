@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
-  head: () => ({ meta: [{ title: "Sign in — ORBIS" }] }),
+  head: () => ({ meta: [{ title: "Sign in — Fudiyo" }] }),
 });
 
 function LoginPage() {
@@ -39,7 +39,7 @@ function LoginPage() {
     <main className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm bg-card rounded-2xl shadow-card p-8 border border-border">
         <div className="flex flex-col items-center gap-2 mb-8">
-          <div className="text-3xl font-bold tracking-tight text-primary">ORBIS</div>
+          <div className="text-3xl font-bold tracking-tight text-primary">Fudiyo</div>
           <div className="text-xs text-muted-foreground">Restaurant Management</div>
         </div>
         <form onSubmit={submit} className="space-y-4">
