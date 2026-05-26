@@ -46,7 +46,7 @@ function SettingsPage() {
 
   const save = async (patch: Partial<Restaurant>) => {
     if (!r) return;
-    const { error } = await supabase.from("restaurants").update(patch).eq("id", r.id);
+    const { error } = await supabase.from("restaurants").update(patch as never).eq("id", r.id);
     if (error) toast.error(error.message); else { toast.success("Saved"); void reload(); }
   };
 
