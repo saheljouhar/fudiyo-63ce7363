@@ -9,9 +9,9 @@ export const Route = createFileRoute("/_authenticated/kitchen")({
   head: () => ({ meta: [{ title: "Kitchen — Fudiyo" }] }),
 });
 
-type Status = "pending" | "preparing" | "ready" | "served";
+type Status = "pending" | "cooking" | "ready" | "billed" | "cleared" | "voided";
 type Tab = "new" | "cooking" | "ready" | "done";
-const TAB_TO_STATUS: Record<Tab, Status> = { new: "pending", cooking: "preparing", ready: "ready", done: "served" };
+const TAB_TO_STATUS: Record<Tab, Status> = { new: "pending", cooking: "cooking", ready: "ready", done: "billed" };
 
 interface OrderItem { name: string; qty: number; note?: string }
 interface Order {
@@ -40,7 +40,7 @@ function KitchenPage() {
       supabase.from("orders").select("id,table_id,status,items,created_at,order_type,note,round").order("created_at", { ascending: false }),
       supabase.from("tables").select("id,number"),
     ]);
-    if (o) setOrders(o as Order[]);
+    if (o) setOrders(o as unknown as Order[]);
     if (t) setTables(Object.fromEntries(t.map((x) => [x.id, x.number])));
   };
 
@@ -104,7 +104,7 @@ function KitchenPage() {
   const visible = orders.filter((o) => o.status === TAB_TO_STATUS[tab]);
 
   const advance = async (o: Order) => {
-    const next: Status = o.status === "pending" ? "preparing" : o.status === "preparing" ? "ready" : "served";
+    const next: Status = o.status === "pending" ? "cooking" : o.status === "cooking" ? "ready" : "billed";
     const { error } = await supabase.from("orders").update({ status: next }).eq("id", o.id);
     if (error) { toast.error(error.message); return; }
     if (next === "served") {
