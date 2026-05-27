@@ -8,6 +8,9 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/_authenticated/staff")({
   component: StaffPage,
   head: () => ({ meta: [{ title: "Staff — Fudiyo" }] }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    tab: (s.tab as "accounts" | "attendance" | "shifts" | undefined) ?? undefined,
+  }),
 });
 
 type Tab = "accounts" | "attendance" | "shifts";
@@ -24,7 +27,8 @@ const ROLE_TINT: Record<Role, string> = {
 };
 
 function StaffPage() {
-  const [tab, setTab] = useState<Tab>("accounts");
+  const { tab: initialTab } = Route.useSearch();
+  const [tab, setTab] = useState<Tab>(initialTab ?? "accounts");
   return (
     <main className="p-6 max-w-[1400px] mx-auto">
       <PageHeader title="Staff" subtitle="Accounts, attendance, shifts" />
