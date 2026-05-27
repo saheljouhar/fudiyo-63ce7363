@@ -19,7 +19,7 @@ function Layout() {
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       <Sidebar />
-      <div className="pb-16 md:pb-0 min-h-screen" style={{ paddingLeft: "var(--sb-w, 220px)" }}>
+      <div className="pb-16 md:pb-0 min-h-screen md:pl-[var(--sb-w,220px)]">
         <div className="flex justify-end px-6 pt-4">
           <AnnouncementBell />
         </div>
