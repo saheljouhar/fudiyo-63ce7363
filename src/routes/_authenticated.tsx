@@ -17,9 +17,9 @@ export const Route = createFileRoute("/_authenticated")({
 
 function Layout() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#F8FAFC]">
       <Sidebar />
-      <div className="md:pl-16 pb-16 md:pb-0 min-h-screen">
+      <div className="pb-16 md:pb-0 min-h-screen" style={{ paddingLeft: "var(--sb-w, 220px)" }}>
         <div className="flex justify-end px-6 pt-4">
           <AnnouncementBell />
         </div>
