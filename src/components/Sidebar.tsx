@@ -1,108 +1,170 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Home, Grid3x3, ClipboardList, ChefHat, History, UtensilsCrossed, CalendarDays, Users, BarChart3, Settings, LogOut } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Home, Receipt, ClipboardList, Flame, Grid3x3, UtensilsCrossed, Package,
+  UserRound, CalendarCheck, CalendarDays, Users, BarChart3, Settings, LogOut,
+  ChevronLeft, ChevronRight, DoorOpen,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth, type AppRole } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { LucideIcon } from "lucide-react";
 
-type NavItem = { to: string; icon: LucideIcon; label: string; divideAfter?: boolean; roles?: AppRole[] };
+type NavItem = {
+  to: string;
+  icon: LucideIcon;
+  label: string;
+  color: string;
+  divideAfter?: boolean;
+  search?: Record<string, string>;
+};
 
 const NAV: NavItem[] = [
-  { to: "/dashboard", icon: Home, label: "Dashboard" },
-  { to: "/tables", icon: Grid3x3, label: "Tables" },
-  { to: "/orders", icon: ClipboardList, label: "Orders", divideAfter: true },
-  { to: "/kitchen", icon: ChefHat, label: "Kitchen" },
-  { to: "/history", icon: History, label: "Order History" },
-  { to: "/menu", icon: UtensilsCrossed, label: "Menu" },
-  { to: "/bookings", icon: CalendarDays, label: "Bookings" },
-  { to: "/staff", icon: Users, label: "Staff" },
-  { to: "/reports", icon: BarChart3, label: "Reports", divideAfter: true },
-  { to: "/settings", icon: Settings, label: "Settings" },
+  { to: "/dashboard", icon: Home, label: "Home", color: "#7C3AED", divideAfter: true },
+  { to: "/orders", icon: Receipt, label: "Dashboard Billing", color: "#DC2626" },
+  { to: "/history", icon: ClipboardList, label: "Orders", color: "#EA580C" },
+  { to: "/kitchen", icon: Flame, label: "Kitchen", color: "#EF4444", divideAfter: true },
+  { to: "/tables", icon: Grid3x3, label: "Tables", color: "#475569" },
+  { to: "/menu", icon: UtensilsCrossed, label: "Menu", color: "#16A34A" },
+  { to: "/inventory", icon: Package, label: "Inventory", color: "#0D9488" },
+  { to: "/customers", icon: UserRound, label: "Customers", color: "#2563EB" },
+  { to: "/attendance", icon: CalendarCheck, label: "Attendance", color: "#DB2777" },
+  { to: "/bookings", icon: CalendarDays, label: "Bookings", color: "#4F46E5", divideAfter: true },
+  { to: "/staff", icon: Users, label: "Staff", color: "#0891B2" },
+  { to: "/reports", icon: BarChart3, label: "Reports", color: "#D97706" },
+  { to: "/settings", icon: Settings, label: "Settings", color: "#6B7280" },
 ];
+
+const LS_KEY = "fudiyo:sidebar:collapsed";
 
 export function Sidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
-  const { name } = useAuth();
+  const { name, role } = useAuth();
   const [lang, setLang] = useLang();
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try { setCollapsed(localStorage.getItem(LS_KEY) === "1"); } catch { /* ignore */ }
+  }, []);
+
+  const toggle = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try { localStorage.setItem(LS_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+  };
 
   const logout = async () => {
     await supabase.auth.signOut();
     navigate({ to: "/login" });
   };
 
+  const width = collapsed ? 64 : 220;
+
   return (
-    <TooltipProvider delayDuration={150}>
-      <aside className="hidden md:flex fixed inset-y-0 left-0 z-40 w-16 flex-col bg-sidebar text-sidebar-foreground">
-        <div className="h-16 flex items-center justify-center">
-          <div className="size-9 rounded-lg bg-primary flex items-center justify-center font-bold text-primary-foreground text-sm">O</div>
+    <>
+      {/* Width spacer to keep layout in sync */}
+      <div className="hidden md:block shrink-0" style={{ width }} aria-hidden />
+
+      <aside
+        className="hidden md:flex fixed inset-y-0 left-0 z-40 flex-col bg-white border-r border-[#E2E8F0] transition-[width] duration-150"
+        style={{ width }}
+      >
+        {/* Brand */}
+        <div className="h-16 flex items-center px-3 border-b border-[#F1F5F9]">
+          <div className="size-9 rounded-lg bg-[#0D9488] flex items-center justify-center font-bold text-white text-sm shrink-0">F</div>
+          {!collapsed && (
+            <div className="ml-2.5 font-semibold tracking-tight text-[#111827]">Fudiyo</div>
+          )}
         </div>
-        <nav className="flex-1 flex flex-col items-center gap-1 py-2">
+
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-2">
           {NAV.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             return (
-              <div key={item.to} className="w-full flex flex-col items-center">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link
-                      to={item.to}
-                      className={`group relative size-10 rounded-lg flex items-center justify-center transition-colors ${
-                        active
-                          ? "bg-sidebar-active text-white"
-                          : "text-sidebar-icon hover:bg-sidebar-active/60 hover:text-white"
-                      }`}
+              <div key={item.to}>
+                <Link
+                  to={item.to}
+                  title={collapsed ? item.label : undefined}
+                  className={`relative mx-2 my-0.5 flex items-center gap-3 rounded-md transition-colors ${
+                    collapsed ? "justify-center h-10 w-10" : "h-10 px-3"
+                  } ${active ? "" : "hover:bg-[#F1F5F9]"}`}
+                  style={
+                    active
+                      ? { backgroundColor: hexA(item.color, 0.1), color: item.color }
+                      : { color: "#6B7280" }
+                  }
+                >
+                  {active && (
+                    <span
+                      className="absolute left-[-8px] top-1.5 bottom-1.5 w-[3px] rounded-r"
+                      style={{ backgroundColor: item.color }}
+                    />
+                  )}
+                  <Icon
+                    className="size-5 shrink-0"
+                    style={{ color: active ? item.color : item.color }}
+                  />
+                  {!collapsed && (
+                    <span
+                      className="text-[13px] font-medium truncate"
+                      style={{ color: active ? item.color : "#374151" }}
                     >
-                      {active && (
-                        <span className="absolute left-[-12px] top-1.5 bottom-1.5 w-[3px] rounded-r bg-primary" />
-                      )}
-                      <Icon className="size-5" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">{item.label}</TooltipContent>
-                </Tooltip>
-                {item.divideAfter && <div className="w-6 my-2 border-t border-white/10" />}
+                      {item.label}
+                    </span>
+                  )}
+                </Link>
+                {item.divideAfter && <div className={`my-2 border-t border-[#F1F5F9] ${collapsed ? "mx-3" : "mx-3"}`} />}
               </div>
             );
           })}
         </nav>
-        <div className="py-3 flex flex-col items-center gap-2 border-t border-white/10">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setLang(lang === "en" ? "ml" : "en")}
-                className="size-8 rounded-md text-xs font-semibold text-sidebar-icon hover:text-white hover:bg-sidebar-active"
-              >
-                {lang === "en" ? "EN" : "ML"}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Language</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="size-8 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center">
-                {name?.[0]?.toUpperCase() ?? "U"}
+
+        {/* Footer */}
+        <div className="border-t border-[#F1F5F9] p-2 flex flex-col gap-2">
+          <button
+            onClick={() => setLang(lang === "en" ? "ml" : "en")}
+            className={`h-8 rounded-full bg-[#F1F5F9] text-[11px] font-semibold text-[#374151] hover:bg-[#E2E8F0] inline-flex items-center justify-center ${collapsed ? "w-10 mx-auto" : "px-3 self-start"}`}
+            title="Language"
+          >
+            {collapsed ? (lang === "en" ? "EN" : "ML") : (lang === "en" ? "EN · English" : "ML · മലയാളം")}
+          </button>
+
+          <div className={`flex items-center gap-2 ${collapsed ? "justify-center" : "px-1"}`}>
+            <div className="size-8 rounded-full bg-[#0D9488] text-white text-xs font-semibold flex items-center justify-center shrink-0">
+              {name?.[0]?.toUpperCase() ?? "U"}
+            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <div className="text-[12px] font-semibold text-[#111827] truncate">{name || "User"}</div>
+                <div className="text-[10px] text-[#6B7280] capitalize truncate">{role || "—"}</div>
               </div>
-            </TooltipTrigger>
-            <TooltipContent side="right">{name || "User"}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={logout}
-                className="size-8 rounded-md text-sidebar-icon hover:text-white hover:bg-sidebar-active flex items-center justify-center"
-              >
-                <LogOut className="size-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Log out</TooltipContent>
-          </Tooltip>
+            )}
+          </div>
+
+          <button
+            onClick={logout}
+            className={`h-9 inline-flex items-center gap-2 rounded-md text-[#DC2626] hover:bg-[#FEE2E2] text-[12px] font-semibold ${collapsed ? "justify-center w-10 mx-auto" : "px-3"}`}
+            title="Log out"
+          >
+            <DoorOpen className="size-4" />
+            {!collapsed && <span>Log out</span>}
+          </button>
+
+          <button
+            onClick={toggle}
+            className={`h-8 inline-flex items-center justify-center rounded-md text-[#9CA3AF] hover:text-[#374151] hover:bg-[#F1F5F9] ${collapsed ? "w-10 mx-auto" : ""}`}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
+          </button>
         </div>
       </aside>
 
       {/* Mobile bottom bar */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-sidebar text-sidebar-foreground border-t border-white/10 flex justify-around py-2">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-[#E2E8F0] flex justify-around py-1.5">
         {NAV.slice(0, 5).map((item) => {
           const Icon = item.icon;
           const active = pathname.startsWith(item.to);
@@ -110,16 +172,23 @@ export function Sidebar() {
             <Link
               key={item.to}
               to={item.to}
-              className={`flex flex-col items-center justify-center px-3 py-1 rounded-md text-[10px] gap-0.5 ${
-                active ? "text-white" : "text-sidebar-icon"
-              }`}
+              className="flex flex-col items-center justify-center px-2 py-1 rounded-md text-[10px] gap-0.5"
+              style={{ color: active ? item.color : "#6B7280" }}
             >
-              <Icon className="size-5" />
-              {item.label.split(" ")[0]}
+              <Icon className="size-5" style={{ color: item.color }} />
+              <span className="truncate max-w-[60px]">{item.label.split(" ")[0]}</span>
             </Link>
           );
         })}
       </nav>
-    </TooltipProvider>
+    </>
   );
+}
+
+function hexA(hex: string, alpha: number) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
