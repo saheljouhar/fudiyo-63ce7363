@@ -48,6 +48,10 @@ export function Sidebar() {
     try { setCollapsed(localStorage.getItem(LS_KEY) === "1"); } catch { /* ignore */ }
   }, []);
 
+  useEffect(() => {
+    document.documentElement.style.setProperty("--sb-w", `${collapsed ? 64 : 220}px`);
+  }, [collapsed]);
+
   const toggle = () => {
     const next = !collapsed;
     setCollapsed(next);
@@ -63,9 +67,6 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Width spacer to keep layout in sync */}
-      <div className="hidden md:block shrink-0" style={{ width }} aria-hidden />
-
       <aside
         className="hidden md:flex fixed inset-y-0 left-0 z-40 flex-col bg-white border-r border-[#E2E8F0] transition-[width] duration-150"
         style={{ width }}
