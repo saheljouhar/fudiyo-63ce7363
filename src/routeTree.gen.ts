@@ -19,6 +19,7 @@ import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedOrdersRouteImport } from './routes/_authenticated/orders'
 import { Route as AuthenticatedMenuRouteImport } from './routes/_authenticated/menu'
 import { Route as AuthenticatedKitchenRouteImport } from './routes/_authenticated/kitchen'
+import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
@@ -72,6 +73,11 @@ const AuthenticatedKitchenRoute = AuthenticatedKitchenRouteImport.update({
   path: '/kitchen',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedInventoryRoute = AuthenticatedInventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/bookings': typeof AuthenticatedBookingsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/inventory': typeof AuthenticatedInventoryRoute
   '/kitchen': typeof AuthenticatedKitchenRoute
   '/menu': typeof AuthenticatedMenuRoute
   '/orders': typeof AuthenticatedOrdersRoute
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/bookings': typeof AuthenticatedBookingsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
+  '/inventory': typeof AuthenticatedInventoryRoute
   '/kitchen': typeof AuthenticatedKitchenRoute
   '/menu': typeof AuthenticatedMenuRoute
   '/orders': typeof AuthenticatedOrdersRoute
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/_authenticated/bookings': typeof AuthenticatedBookingsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
+  '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
   '/_authenticated/kitchen': typeof AuthenticatedKitchenRoute
   '/_authenticated/menu': typeof AuthenticatedMenuRoute
   '/_authenticated/orders': typeof AuthenticatedOrdersRoute
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
     | '/bookings'
     | '/dashboard'
     | '/history'
+    | '/inventory'
     | '/kitchen'
     | '/menu'
     | '/orders'
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
     | '/bookings'
     | '/dashboard'
     | '/history'
+    | '/inventory'
     | '/kitchen'
     | '/menu'
     | '/orders'
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
     | '/_authenticated/bookings'
     | '/_authenticated/dashboard'
     | '/_authenticated/history'
+    | '/_authenticated/inventory'
     | '/_authenticated/kitchen'
     | '/_authenticated/menu'
     | '/_authenticated/orders'
@@ -256,6 +268,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedKitchenRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/inventory': {
+      id: '/_authenticated/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof AuthenticatedInventoryRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/history': {
       id: '/_authenticated/history'
       path: '/history'
@@ -284,6 +303,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedBookingsRoute: typeof AuthenticatedBookingsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
+  AuthenticatedInventoryRoute: typeof AuthenticatedInventoryRoute
   AuthenticatedKitchenRoute: typeof AuthenticatedKitchenRoute
   AuthenticatedMenuRoute: typeof AuthenticatedMenuRoute
   AuthenticatedOrdersRoute: typeof AuthenticatedOrdersRoute
@@ -297,6 +317,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedBookingsRoute: AuthenticatedBookingsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
+  AuthenticatedInventoryRoute: AuthenticatedInventoryRoute,
   AuthenticatedKitchenRoute: AuthenticatedKitchenRoute,
   AuthenticatedMenuRoute: AuthenticatedMenuRoute,
   AuthenticatedOrdersRoute: AuthenticatedOrdersRoute,
