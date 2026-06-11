@@ -1,8 +1,11 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/format";
-import { Search, Minus, Plus, Trash2, ShoppingCart, Mic } from "lucide-react";
+import {
+  Search, Minus, Plus, Trash2, ShoppingCart, Mic, Bell, ClipboardList,
+  Grid3x3, UtensilsCrossed, Flame, UserRound, Save, ChefHat,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 
@@ -15,6 +18,7 @@ export const Route = createFileRoute("/_authenticated/orders")({
 interface Dish { id: string; name: string; category: string; price: number; is_available: boolean; description: string | null; photo_url: string | null; restaurant_id: string }
 interface CartItem { id: string; name: string; price: number; qty: number }
 type OrderType = "dine_in" | "takeaway" | "delivery";
+type PayMethod = "cash" | "upi" | "card";
 
 function OrdersPage() {
   const { table: tableId } = Route.useSearch();
@@ -28,6 +32,12 @@ function OrdersPage() {
   const [orderType, setOrderType] = useState<OrderType>("dine_in");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
+  const [mobile, setMobile] = useState("");
+  const [custName, setCustName] = useState("");
+  const [tableNo, setTableNo] = useState("");
+  const [pay, setPay] = useState<PayMethod>("cash");
+
+  useEffect(() => { setTableNo(tableNum); }, [tableNum]);
 
   useEffect(() => {
     (async () => {
@@ -74,7 +84,7 @@ function OrdersPage() {
   const tax = Math.round(subtotal * 0.05);
   const total = subtotal + tax;
 
-  const send = async () => {
+  const send = async (kind: "save" | "kot") => {
     if (cart.length === 0) return toast.error("Cart is empty");
     setSending(true);
     const restaurantId = dishes[0]?.restaurant_id;
@@ -87,17 +97,19 @@ function OrdersPage() {
       subtotal, tax, total, discount: 0,
       order_type: orderType,
       status: "pending",
-      note: note || null,
+      note: [note, mobile && `Mobile:${mobile}`, custName && `Name:${custName}`, `Pay:${pay}`].filter(Boolean).join(" | ") || null,
     });
     setSending(false);
     if (error) return toast.error(error.message);
-    toast.success("Order sent to kitchen");
+    toast.success(kind === "kot" ? "Order sent to kitchen" : "Order saved");
     setCart([]); setNote("");
-    navigate({ to: "/tables" });
+    if (kind === "kot") navigate({ to: "/tables" });
   };
 
   return (
-    <div className="flex h-[calc(100vh-72px)] -mt-4 -mx-6">
+    <div className="-mx-6 -mt-4">
+      <TopIconBar />
+      <div className="flex h-[calc(100vh-128px)]">
       {/* LEFT: categories */}
       <aside className="w-[160px] shrink-0 bg-card border-r border-border overflow-y-auto">
         <div className="px-3 py-3 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">Categories</div>
@@ -134,27 +146,27 @@ function OrdersPage() {
                   const inCart = cart.find((x) => x.id === d.id);
                   return (
                     <div key={d.id} className={`rounded-xl border border-border bg-card overflow-hidden ${!d.is_available ? "opacity-50" : ""}`}>
-                      <div className="relative h-32 bg-primary/10 flex items-center justify-center">
+                      <div className="relative h-[180px] bg-primary/10 flex items-center justify-center">
                         {d.photo_url ? <img src={d.photo_url} alt={d.name} className="size-full object-cover" /> : <div className="text-primary text-3xl font-bold">{d.name[0]}</div>}
                         <span className="absolute top-1.5 left-1.5 size-2.5 rounded-full bg-[#16A34A] border-2 border-white" />
                         {!d.is_available && <span className="absolute top-1.5 right-1.5 text-[10px] font-semibold bg-[#DC2626] text-white px-1.5 py-0.5 rounded">Unavailable</span>}
                       </div>
-                      <div className="p-2.5">
-                        <div className="font-semibold text-sm leading-tight line-clamp-1">{d.name}</div>
-                        {d.description && <div className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{d.description}</div>}
+                      <div className="p-3">
+                        <div className="font-semibold text-[16px] leading-tight line-clamp-1">{d.name}</div>
+                        {d.description && <div className="text-[13px] text-muted-foreground line-clamp-1 mt-0.5">{d.description}</div>}
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-sm font-semibold text-primary">{formatINR(d.price)}</span>
+                          <span className="text-[16px] font-semibold text-[#0D9488]">{formatINR(d.price)}</span>
                         </div>
                         {!d.is_available ? (
-                          <button disabled className="mt-2 w-full h-8 rounded-md border border-border text-xs text-muted-foreground">Unavailable</button>
+                          <button disabled className="mt-2 w-full h-12 rounded-md border border-border text-[14px] text-muted-foreground">Unavailable</button>
                         ) : inCart ? (
-                          <div className="mt-2 flex items-center justify-between gap-1 h-8 bg-primary text-primary-foreground rounded-md px-1">
-                            <button onClick={() => dec(d.id)} className="size-7 flex items-center justify-center"><Minus className="size-3.5" /></button>
-                            <span className="font-semibold text-sm">{inCart.qty}</span>
-                            <button onClick={() => inc(d.id)} className="size-7 flex items-center justify-center"><Plus className="size-3.5" /></button>
+                          <div className="mt-2 flex items-center justify-between gap-1 h-12 bg-[#0D9488] text-white rounded-md px-2">
+                            <button onClick={() => dec(d.id)} className="size-10 flex items-center justify-center"><Minus className="size-4" /></button>
+                            <span className="font-semibold text-[16px]">{inCart.qty}</span>
+                            <button onClick={() => inc(d.id)} className="size-10 flex items-center justify-center"><Plus className="size-4" /></button>
                           </div>
                         ) : (
-                          <button onClick={() => addToCart(d)} className="mt-2 w-full h-8 rounded-md border border-primary text-primary text-xs font-semibold hover:bg-primary hover:text-primary-foreground transition-colors">+ ADD</button>
+                          <button onClick={() => addToCart(d)} className="mt-2 w-full h-12 rounded-md border border-[#0D9488] text-[#0D9488] text-[15px] font-bold hover:bg-[#0D9488] hover:text-white transition-colors">+ ADD</button>
                         )}
                       </div>
                     </div>
@@ -170,12 +182,17 @@ function OrdersPage() {
       </section>
 
       {/* RIGHT: cart */}
-      <aside className="w-[300px] shrink-0 bg-card border-l border-border flex flex-col">
+      <aside className="w-[340px] shrink-0 bg-card border-l border-border flex flex-col">
         <div className="p-4 border-b border-border">
-          <h2 className="font-semibold text-base">Order Summary</h2>
-          <div className="flex items-center gap-2 mt-2 text-xs">
-            {tableNum && <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded font-semibold">T{tableNum}</span>}
-            <span className="text-muted-foreground">Waiter: {name || "—"}</span>
+          <h2 className="font-semibold text-[18px]">Order Summary</h2>
+          <div className="flex items-center gap-2 mt-2 text-[13px]">
+            {tableNum ? (
+              <span className="bg-[#0D9488] text-white px-3 py-1 rounded-full font-bold text-[14px]">Table {tableNum}</span>
+            ) : (
+              <span className="text-[#DC2626] text-[13px] font-semibold">No table selected</span>
+            )}
+            <span className="bg-[#F1F5F9] text-[#374151] px-2 py-1 rounded-full font-semibold text-[12px]">Round 1</span>
+            <span className="text-muted-foreground ml-auto">Waiter: {name || "—"}</span>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
@@ -188,12 +205,12 @@ function OrdersPage() {
           ) : (
             <div className="space-y-2">
               {cart.map((it) => (
-                <div key={it.id} className="flex items-center gap-2 py-2 border-b border-border last:border-0">
+                <div key={it.id} className="flex items-center gap-2 py-2.5 border-b border-border last:border-0 min-h-[44px]">
                   <div className="flex-1">
-                    <div className="text-sm font-medium">{it.name}</div>
-                    <div className="text-xs text-muted-foreground">{it.qty} × {formatINR(it.price)}</div>
+                    <div className="text-[16px] font-medium">{it.name}</div>
+                    <div className="text-[12px] text-muted-foreground">{it.qty} × {formatINR(it.price)}</div>
                   </div>
-                  <div className="text-sm font-semibold">{formatINR(it.qty * it.price)}</div>
+                  <div className="text-[16px] font-semibold">{formatINR(it.qty * it.price)}</div>
                   <button onClick={() => remove(it.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
                 </div>
               ))}
@@ -205,21 +222,71 @@ function OrdersPage() {
               <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add order note..." className="w-full mt-3 h-16 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none" />
             </div>
           )}
+
+          {/* Customer info */}
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="Mobile Number" className="h-11 rounded-lg border border-input px-2 text-[15px]" />
+            <input value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="Customer Name" className="h-11 rounded-lg border border-input px-2 text-[15px]" />
+            <input value={tableNo} onChange={(e) => setTableNo(e.target.value)} placeholder="Table No" className="h-11 rounded-lg border border-input px-2 text-[15px]" />
+          </div>
+
+          {/* Payment */}
+          <div className="mt-4">
+            <div className="text-[14px] font-semibold mb-2">Payment Method</div>
+            <div className="grid grid-cols-3 gap-2">
+              {(["cash", "upi", "card"] as PayMethod[]).map((m) => {
+                const active = pay === m;
+                return (
+                  <button key={m} onClick={() => setPay(m)}
+                    className={`h-11 rounded-full text-[14px] font-semibold capitalize ${active ? "bg-[#DC2626] text-white" : "bg-white border border-input text-[#64748B]"}`}>
+                    {m === "upi" ? "UPI" : m[0].toUpperCase() + m.slice(1)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        <div className="p-4 border-t border-border space-y-2">
-          <button onClick={send} disabled={sending || cart.length === 0} className="w-full h-11 rounded-md bg-primary text-primary-foreground font-semibold text-sm disabled:opacity-50">
-            {sending ? "Sending..." : "Send to Kitchen"}
+        <div className="p-4 border-t border-border flex gap-2">
+          <button onClick={() => send("save")} disabled={sending || cart.length === 0}
+            className="flex-1 h-12 rounded-md bg-white border border-[#0D9488] text-[#0D9488] font-semibold text-[15px] inline-flex items-center justify-center gap-2 disabled:opacity-50">
+            <Save className="size-4" /> Save Order
           </button>
-          <button onClick={() => { setCart([]); setNote(""); }} className="w-full h-9 rounded-md border border-input text-sm font-semibold">Hold Order</button>
+          <button onClick={() => send("kot")} disabled={sending || cart.length === 0}
+            className="flex-1 h-12 rounded-md bg-[#DC2626] hover:bg-[#B91C1C] text-white font-semibold text-[15px] inline-flex items-center justify-center gap-2 disabled:opacity-50">
+            <ChefHat className="size-4" /> Place Order (KOT)
+          </button>
         </div>
       </aside>
+      </div>
+    </div>
+  );
+}
+
+function TopIconBar() {
+  const items = [
+    { to: "/history", icon: Bell, label: "Alerts", active: false },
+    { to: "/orders", icon: ClipboardList, label: "ORDERS", active: true },
+    { to: "/tables", icon: Grid3x3, label: "TABLES", active: false },
+    { to: "/menu", icon: UtensilsCrossed, label: "Menu", active: false },
+    { to: "/kitchen", icon: Flame, label: "Kitchen", active: false },
+    { to: "/customers", icon: UserRound, label: "Customers", active: false },
+  ];
+  return (
+    <div className="bg-white border-b border-[#E2E8F0] px-3 flex gap-1 overflow-x-auto">
+      {items.map(({ to, icon: Icon, label, active }) => (
+        <Link key={label} to={to}
+          className={`flex flex-col items-center justify-center w-16 h-14 shrink-0 text-[11px] font-semibold ${active ? "text-[#DC2626] border-b-2 border-[#DC2626]" : "text-[#6B7280] hover:text-[#111827]"}`}>
+          <Icon className="size-5 mb-0.5" style={{ color: active ? "#DC2626" : undefined }} />
+          {label}
+        </Link>
+      ))}
     </div>
   );
 }
 
 function CatItem({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} className={`w-full flex items-center justify-between px-3 py-2.5 text-sm transition-colors text-left ${active ? "bg-primary/10 text-primary border-l-2 border-primary font-semibold" : "border-l-2 border-transparent text-foreground hover:bg-muted"}`}>
+    <button onClick={onClick} className={`w-full flex items-center justify-between px-3 h-12 text-[16px] transition-colors text-left ${active ? "bg-primary/10 text-primary border-l-2 border-primary font-semibold" : "border-l-2 border-transparent text-foreground hover:bg-muted"}`}>
       <span className="truncate">{label}</span>
       <span className="text-[11px] text-muted-foreground bg-muted px-1.5 rounded">{count}</span>
     </button>
