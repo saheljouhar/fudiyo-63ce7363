@@ -96,7 +96,7 @@ function OrdersPage() {
       items: JSON.parse(JSON.stringify(cart)),
       subtotal, tax, total, discount: 0,
       order_type: orderType,
-      status: kind === "kot" ? "pending" : "draft",
+      status: "pending",
       note: [note, mobile && `Mobile:${mobile}`, custName && `Name:${custName}`, `Pay:${pay}`].filter(Boolean).join(" | ") || null,
     });
     setSending(false);
