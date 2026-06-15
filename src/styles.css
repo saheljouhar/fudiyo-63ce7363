@@ -146,3 +146,5 @@
   50% { box-shadow: 0 0 0 6px oklch(0.78 0.16 70 / 0); }
 }
 .animate-pulse-border { animation: pulse-border 1.2s ease-in-out infinite; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { scrollbar-width: none; }
