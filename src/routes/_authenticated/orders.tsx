@@ -170,7 +170,7 @@ function OrdersPage() {
       orderType === "delivery" && deliveryAddr && `Addr:${deliveryAddr}`,
       ...cart.filter((c) => c.note).map((c) => `${c.name}:${c.note}`),
     ].filter(Boolean) as string[];
-    const status = kind === "kot" ? "pending" : "completed";
+    const status = kind === "kot" ? "pending" : "billed";
     const { data, error } = await supabase.from("orders").insert({
       restaurant_id: restaurantId,
       table_id: tableId ?? null,
@@ -180,14 +180,15 @@ function OrdersPage() {
       subtotal, tax, total, discount: 0,
       order_type: orderType,
       status,
+      payment_method: pay,
       note: noteParts.join(" | ") || null,
-    }).select("id, bill_no").maybeSingle();
+    }).select("id").maybeSingle();
     setSending(false);
     if (error) return toast.error(error.message);
     if (tableId) {
       await supabase.from("tables").update({ status: kind === "kot" ? "occupied" : "available" }).eq("id", tableId);
     }
-    const billNo = (data as { bill_no?: number } | null)?.bill_no ?? Math.floor(Math.random() * 9000) + 1000;
+    const billNo = Math.floor(Math.random() * 9000) + 1000;
     const shortId = (data?.id as string | undefined)?.slice(0, 8) ?? Math.random().toString(36).slice(2, 10);
     setPost({ kind, billNo, shortId, at: new Date().toLocaleString("en-IN"), items: cart, subtotal, tax, total, orderType, custName, pay });
   };
