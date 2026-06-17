@@ -22,7 +22,7 @@ export const Route = createFileRoute("/_authenticated/orders")({
 interface Dish { id: string; name: string; category: string; price: number; is_available: boolean; description: string | null; photo_url: string | null; restaurant_id: string }
 interface CartItem { id: string; name: string; price: number; qty: number; is_veg?: boolean; note?: string }
 interface SavedCart { id: string; label: string; cart: CartItem[]; orderType: OrderType; at: string; code: string }
-interface TableRow { id: string; number: number; seats: number; status: string }
+interface TableRow { id: string; number: string; seats: number; status: string }
 type OrderType = "dine_in" | "takeaway" | "delivery";
 type PayMethod = "cash" | "upi" | "card";
 type GridMode = "compact" | "standard" | "large";
