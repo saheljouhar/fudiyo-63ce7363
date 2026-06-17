@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Sidebar } from "@/components/Sidebar";
 import { AnnouncementBell } from "@/components/AnnouncementBell";
@@ -18,13 +19,15 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function Layout() {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const hideChrome = path.startsWith("/orders");
   return (
     <SidebarProvider>
       <div className="min-h-screen bg-[#F8FAFC]">
         <Sidebar />
         <div className="min-h-screen w-full">
-          <TopBar />
-          <div className="px-6"><AnnouncementBanner /></div>
+          {!hideChrome && <TopBar />}
+          {!hideChrome && <div className="px-6"><AnnouncementBanner /></div>}
           <Outlet />
         </div>
       </div>
