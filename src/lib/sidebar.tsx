@@ -1,25 +1,40 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { useRouterState } from "@tanstack/react-router";
 
-type Ctx = { open: boolean; setOpen: (v: boolean) => void; toggle: () => void };
+const LS_COLLAPSED = "fudiyo.sidebar.collapsed";
+
+type Ctx = {
+  collapsed: boolean;
+  setCollapsed: (v: boolean) => void;
+  toggle: () => void;
+  // Back-compat aliases (older code calls `open`/`setOpen`/`toggle`)
+  open: boolean;
+  setOpen: (v: boolean) => void;
+};
 const SidebarCtx = createContext<Ctx | null>(null);
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  // Default open only on /dashboard
-  const [open, setOpen] = useState<boolean>(false);
-
-  // On every route change: open on /dashboard, otherwise close.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    const stored = localStorage.getItem(LS_COLLAPSED);
+    if (stored !== null) return stored === "1";
+    return window.innerWidth < 1024; // collapsed by default on tablets
+  });
   useEffect(() => {
-    setOpen(pathname === "/dashboard" || pathname.startsWith("/dashboard/"));
-  }, [pathname]);
-
-  const toggle = useCallback(() => setOpen((v) => !v), []);
-  return <SidebarCtx.Provider value={{ open, setOpen, toggle }}>{children}</SidebarCtx.Provider>;
+    if (typeof window !== "undefined") localStorage.setItem(LS_COLLAPSED, collapsed ? "1" : "0");
+  }, [collapsed]);
+  const toggle = useCallback(() => setCollapsed((v) => !v), []);
+  const value: Ctx = {
+    collapsed, setCollapsed, toggle,
+    open: !collapsed, setOpen: (v: boolean) => setCollapsed(!v),
+  };
+  return <SidebarCtx.Provider value={value}>{children}</SidebarCtx.Provider>;
 }
 
 export function useSidebarDrawer(): Ctx {
   const c = useContext(SidebarCtx);
-  if (!c) return { open: false, setOpen: () => {}, toggle: () => {} };
+  if (!c) return {
+    collapsed: false, setCollapsed: () => {}, toggle: () => {},
+    open: true, setOpen: () => {},
+  };
   return c;
 }
