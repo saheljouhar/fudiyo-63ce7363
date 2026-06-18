@@ -2,7 +2,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   Home, Receipt, ClipboardList, Flame, Grid3x3, UtensilsCrossed, Package,
   UserRound, CalendarCheck, CalendarDays, Users, BarChart3, Settings,
-  DoorOpen, ChevronLeft, ChevronRight, UtensilsCrossed as ForkIcon,
+  DoorOpen, ChevronLeft, ChevronRight, Menu as MenuIcon, UtensilsCrossed as ForkIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -60,7 +60,7 @@ export function Sidebar() {
         {!collapsed && (
           <>
             <button onClick={toggle} aria-label="Toggle sidebar" className="size-8 rounded-md hover:bg-[#F1F5F9] inline-flex items-center justify-center text-[#6B7280] shrink-0">
-              <span className="block w-4 h-[2px] bg-current relative before:content-[''] before:absolute before:-top-1.5 before:left-0 before:w-4 before:h-[2px] before:bg-current after:content-[''] after:absolute after:top-1.5 after:left-0 after:w-4 after:h-[2px] after:bg-current" />
+              <MenuIcon className="size-5" />
             </button>
             <div className="size-8 rounded-lg bg-[#DC2626] flex items-center justify-center text-white shrink-0">
               <ForkIcon className="size-4" />
