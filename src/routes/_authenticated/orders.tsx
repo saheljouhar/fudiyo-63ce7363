@@ -99,6 +99,7 @@ function OrdersPage() {
   const [deliveryPhone, setDeliveryPhone] = useState("");
   const [deliveryAddr, setDeliveryAddr] = useState("");
   const [showAddr, setShowAddr] = useState(false);
+  const [addrForm, setAddrForm] = useState({ street: "", landmark: "", city: "", state: "", pincode: "" });
 
   const [showTables, setShowTables] = useState(false);
   const [tablesData, setTablesData] = useState<TableRow[]>([]);
@@ -635,8 +636,8 @@ function TopNav({
 }) {
   const items = [
     { key: "alerts", icon: Bell, label: "Alerts", active: notifOpen, onClick: () => setNotifOpen(!notifOpen) },
-    { key: "orders", icon: ClipboardList, label: "Orders", active: !showTables, to: "/orders" as const },
-    { key: "tables", icon: Grid3x3, label: "Tables", active: showTables, onClick: () => setShowTables(!showTables) },
+    { key: "orders", icon: ClipboardList, label: "Orders", to: "/history" as const },
+    { key: "tables", icon: Grid3x3, label: "Tables", to: "/tables" as const },
     { key: "menu", icon: UtensilsCrossed, label: "Menu", to: "/menu" as const },
     { key: "kitchen", icon: Flame, label: "Kitchen", to: "/kitchen" as const },
     { key: "customers", icon: UserRound, label: "Customers", to: "/customers" as const },
