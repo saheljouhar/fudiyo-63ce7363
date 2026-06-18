@@ -1,11 +1,10 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { Sidebar } from "@/components/Sidebar";
+import { Sidebar, SIDEBAR_WIDTH_EXPANDED, SIDEBAR_WIDTH_COLLAPSED } from "@/components/Sidebar";
 import { AnnouncementBell } from "@/components/AnnouncementBell";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { SidebarProvider, useSidebarDrawer } from "@/lib/sidebar";
-import { Menu } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ location }) => {
@@ -19,34 +18,33 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function Layout() {
-  const path = useRouterState({ select: (s) => s.location.pathname });
-  const hideChrome = path.startsWith("/orders");
   return (
     <SidebarProvider>
-      <div className="min-h-screen bg-[#F8FAFC]">
-        <Sidebar />
-        <div className="min-h-screen w-full">
-          {!hideChrome && <TopBar />}
-          {!hideChrome && <div className="px-6"><AnnouncementBanner /></div>}
-          <Outlet />
-        </div>
-      </div>
+      <LayoutInner />
     </SidebarProvider>
   );
 }
 
-function TopBar() {
-  const { toggle } = useSidebarDrawer();
+function LayoutInner() {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const hideChrome = path.startsWith("/orders");
+  const { collapsed } = useSidebarDrawer();
+  const offset = hideChrome ? 0 : (collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED);
   return (
-    <div className="flex items-center justify-between px-4 md:px-6 pt-4">
-      <button
-        onClick={toggle}
-        aria-label="Open menu"
-        className="size-11 rounded-lg border border-[#E2E8F0] bg-white hover:bg-[#F1F5F9] inline-flex items-center justify-center text-[#374151]"
+    <div className="min-h-screen bg-[#F8FAFC]">
+      {!hideChrome && <Sidebar />}
+      <div
+        className="min-h-screen"
+        style={{ marginLeft: offset, transition: "margin-left 180ms ease" }}
       >
-        <Menu className="size-5" />
-      </button>
-      <AnnouncementBell />
+        {!hideChrome && (
+          <div className="flex items-center justify-end px-4 md:px-6 pt-4">
+            <AnnouncementBell />
+          </div>
+        )}
+        {!hideChrome && <div className="px-6"><AnnouncementBanner /></div>}
+        <Outlet />
+      </div>
     </div>
   );
 }

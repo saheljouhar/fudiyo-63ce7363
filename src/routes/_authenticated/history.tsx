@@ -1,19 +1,24 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { PageHeader } from "@/components/PageHeader";
 import { formatINR } from "@/lib/format";
-import { ChevronDown, ChevronUp, Printer, Eye, Pencil, Calendar } from "lucide-react";
+import {
+  Receipt, ChevronDown, ChevronUp, Printer, Eye, Pencil, RotateCcw, Pause,
+  Calendar, ClipboardList, LayoutGrid, List, BarChart3, Search, Copy, Check,
+  FileSpreadsheet, ArrowUpDown, Plus,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/history")({
   validateSearch: (s: Record<string, unknown>) => ({ table: (s.table as string) ?? undefined }),
   component: HistoryPage,
-  head: () => ({ meta: [{ title: "History — Fudiyo" }] }),
+  head: () => ({ meta: [{ title: "Orders — Fudiyo" }] }),
 });
 
-type SubTab = "orders" | "scheduled" | "summary";
+type Tab = "orders" | "scheduled" | "summary" | "bookings";
 type Status = "pending" | "cooking" | "ready" | "billed" | "cleared" | "voided";
+type ViewMode = "list" | "grid";
+type Range = "today" | "yesterday" | "7d" | "30d";
 
 interface OrderItem { name: string; qty: number; price?: number; note?: string }
 interface OrderRow {
@@ -28,250 +33,530 @@ interface OrderRow {
   tax: number;
   total: number;
   payment_method: string | null;
+  note: string | null;
 }
 
 function HistoryPage() {
-  const [tab, setTab] = useState<SubTab>("orders");
-  return (
-    <main className="p-6 max-w-[1400px] mx-auto">
-      <PageHeader title="Order History & Billing" subtitle="Filters, expandable orders, split bill, void" />
-      <div className="border-b border-border mb-6 flex gap-1">
-        {([["orders","Orders"],["scheduled","Scheduled"],["summary","Sales Summary"]] as const).map(([t,l]) => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px ${tab===t?"border-primary text-primary":"border-transparent text-muted-foreground hover:text-foreground"}`}>{l}</button>
-        ))}
-      </div>
-      {tab === "orders" && <OrdersTab />}
-      {tab === "scheduled" && <ScheduledTab />}
-      {tab === "summary" && <SummaryTab />}
-    </main>
-  );
-}
-
-function OrdersTab() {
+  const [tab, setTab] = useState<Tab>("orders");
+  const [view, setView] = useState<ViewMode>("list");
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [tables, setTables] = useState<Record<string, string>>({});
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<string>("all");
-  const [range, setRange] = useState<"today"|"yesterday"|"7d"|"30d">("today");
-  const [open, setOpen] = useState<Set<string>>(new Set());
-
-  const load = async () => {
-    const [{ data: o }, { data: t }] = await Promise.all([
-      supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(500),
-      supabase.from("tables").select("id,number,floor"),
-    ]);
-    if (o) setOrders(o as unknown as OrderRow[]);
-    if (t) setTables(Object.fromEntries(t.map((x) => [x.id, x.number])));
-  };
 
   useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(500);
+      if (data) setOrders(data as unknown as OrderRow[]);
+    };
     void load();
     const ch = supabase.channel("orders-history").on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => load()).subscribe();
     return () => { void supabase.removeChannel(ch); };
   }, []);
 
+  return (
+    <main className="p-6 max-w-[1500px] mx-auto">
+      <header className="flex items-center justify-between mb-5 gap-4 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="size-12 rounded-xl bg-[#0D9488] inline-flex items-center justify-center text-white shrink-0">
+            <Receipt className="size-6" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-[24px] font-bold text-[#111827] truncate">Order History</h1>
+            <p className="text-[13px] text-[#6B7280]">My Restaurant</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[13px] text-[#6B7280]">{orders.length} orders</span>
+          <div className="inline-flex border border-[#E5E7EB] rounded-lg overflow-hidden">
+            <button onClick={() => setView("list")} className={`size-9 inline-flex items-center justify-center ${view === "list" ? "bg-[#111827] text-white" : "bg-white text-[#6B7280]"}`} aria-label="List view"><List className="size-4" /></button>
+            <button onClick={() => setView("grid")} className={`size-9 inline-flex items-center justify-center ${view === "grid" ? "bg-[#111827] text-white" : "bg-white text-[#6B7280]"}`} aria-label="Grid view"><LayoutGrid className="size-4" /></button>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex flex-wrap gap-2 mb-5">
+        {([
+          ["orders", "orders", ClipboardList],
+          ["scheduled", "Scheduled", Calendar],
+          ["summary", "Sales Summary", BarChart3],
+          ["bookings", "Bookings", Calendar],
+        ] as const).map(([key, label, Icon]) => {
+          const active = tab === key;
+          return (
+            <button key={key} onClick={() => setTab(key)}
+              className={`h-10 px-4 rounded-full inline-flex items-center gap-2 text-[13px] font-semibold border ${active ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#6B7280] border-[#E5E7EB] hover:text-[#111827]"}`}>
+              <Icon className="size-4" /> {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "orders" && <OrdersTab orders={orders} view={view} />}
+      {tab === "scheduled" && <ScheduledTab />}
+      {tab === "summary" && <SummaryTab orders={orders} />}
+      {tab === "bookings" && <BookingsEmbed />}
+    </main>
+  );
+}
+
+/* ---------------- Orders Tab ---------------- */
+
+function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<string>("all");
+  const [type, setType] = useState<string>("all");
+  const [range, setRange] = useState<Range>("today");
+  const [open, setOpen] = useState<Set<string>>(new Set());
+
   const filtered = useMemo(() => {
     const now = Date.now();
-    const cutoff = range === "today" ? new Date().setHours(0,0,0,0)
-      : range === "yesterday" ? new Date(Date.now() - 86400000).setHours(0,0,0,0)
-      : range === "7d" ? now - 7*86400000 : now - 30*86400000;
-    const top = range === "yesterday" ? new Date().setHours(0,0,0,0) : Infinity;
+    const startOfToday = new Date().setHours(0, 0, 0, 0);
+    const cutoff = range === "today" ? startOfToday
+      : range === "yesterday" ? startOfToday - 86400000
+      : range === "7d" ? now - 7 * 86400000 : now - 30 * 86400000;
+    const top = range === "yesterday" ? startOfToday : Infinity;
     return orders.filter((o) => {
       const ts = new Date(o.created_at).getTime();
       if (ts < cutoff || ts >= top) return false;
       if (status !== "all" && o.status !== status) return false;
-      if (search && !o.id.includes(search) && !(o.waiter_name ?? "").toLowerCase().includes(search.toLowerCase())) return false;
+      if (type !== "all" && o.order_type !== type) return false;
+      if (search) {
+        const s = search.toLowerCase();
+        if (!o.id.toLowerCase().includes(s) && !(o.waiter_name ?? "").toLowerCase().includes(s) && !(o.note ?? "").toLowerCase().includes(s)) return false;
+      }
       return true;
     });
-  }, [orders, search, status, range]);
+  }, [orders, search, status, type, range]);
 
-  const stats = useMemo(() => {
-    const revenue = filtered.reduce((s, o) => s + Number(o.total), 0);
-    const cash = filtered.filter((o) => o.payment_method === "cash").length;
-    const upi = filtered.filter((o) => o.payment_method === "upi").length;
-    const completed = filtered.filter((o) => o.status === "billed" || o.status === "cleared").length;
-    return { revenue, count: filtered.length, cash, upi, completed };
-  }, [filtered]);
-
-  const pending = orders.filter((o) => o.status === "ready" || o.status === "billed");
+  const revenue = filtered.reduce((s, o) => s + Number(o.total), 0);
+  const taxTotal = filtered.reduce((s, o) => s + Number(o.tax), 0);
+  const completed = filtered.filter((o) => o.status === "billed" || o.status === "cleared").length;
+  const pays: Record<string, number> = {};
+  filtered.forEach((o) => { if (o.payment_method) pays[o.payment_method] = (pays[o.payment_method] ?? 0) + 1; });
 
   return (
     <>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        <Stat color="#16A34A" label="REVENUE" value={formatINR(stats.revenue)} sub="incl. tax" />
-        <Stat color="#2563EB" label="ORDERS" value={String(stats.count)} />
-        <Stat color="#7C3AED" label="PAYMENTS" value={`${stats.cash} cash · ${stats.upi} UPI`} />
-        <Stat color="#D97706" label="COMPLETED" value={String(stats.completed)} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <StatCard tint="#DCFCE7" iconBg="#16A34A" label="REVENUE" value={formatINR(revenue)} sub={`incl. tax: ${formatINR(taxTotal)}`} icon="₹" />
+        <StatCard tint="#DBEAFE" iconBg="#2563EB" label="ORDERS" value={String(filtered.length)} icon="📦" />
+        <StatCard tint="#EDE9FE" iconBg="#7C3AED" label="PAYMENTS" value={Object.keys(pays).length === 0 ? "--" : Object.entries(pays).map(([k, v]) => `${v} ${k}`).join(" · ")} icon="💳" />
+        <StatCard tint="#FEF9C3" iconBg="#D97706" label="COMPLETED" value={String(completed)} icon="✓" />
       </div>
-      <div className="flex flex-wrap gap-2 mb-4 items-center">
-        <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search id or waiter..." className="h-9 px-3 rounded-md border border-input bg-card text-sm flex-1 min-w-[200px]" />
-        <select value={status} onChange={(e)=>setStatus(e.target.value)} className="h-9 px-3 rounded-md border border-input bg-card text-sm">
+
+      <div className="flex flex-wrap items-center gap-2 mb-3 bg-white border border-[#E5E7EB] rounded-xl p-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#E5E7EB] text-[13px]" />
+        </div>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]">
           <option value="all">All Status</option>
-          <option value="billed">Billed</option><option value="cleared">Cleared</option>
-          <option value="pending">Pending</option><option value="cooking">Cooking</option><option value="ready">Ready</option><option value="voided">Voided</option>
+          <option value="billed">Billing Completed</option>
+          <option value="cooking">In Progress</option>
+          <option value="ready">Pending Bill</option>
+          <option value="voided">Voided</option>
         </select>
-        {(["today","yesterday","7d","30d"] as const).map((r) => (
-          <button key={r} onClick={()=>setRange(r)} className={`h-9 px-3 rounded-md text-sm font-medium capitalize ${range===r?"bg-primary text-primary-foreground":"border border-input bg-card"}`}>{r}</button>
+        <select value={type} onChange={(e) => setType(e.target.value)} className="h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]">
+          <option value="all">All Types</option>
+          <option value="dine_in">Dine In</option>
+          <option value="takeaway">Takeaway</option>
+          <option value="delivery">Delivery</option>
+        </select>
+        {(["today", "yesterday", "7d", "30d"] as Range[]).map((r) => (
+          <button key={r} onClick={() => setRange(r)} className={`h-9 px-3 rounded-lg text-[12px] font-semibold capitalize ${range === r ? "bg-[#0D9488] text-white" : "border border-[#E5E7EB] bg-white text-[#6B7280]"}`}>
+            {r === "today" ? "Today" : r === "yesterday" ? "Yesterday" : r.toUpperCase()}
+          </button>
         ))}
       </div>
 
-      {pending.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-sm font-semibold mb-2">Pending Bills ({pending.length})</h3>
-          <div className="space-y-2">
-            {pending.map((o) => <PendingCard key={o.id} o={o} tableNo={o.table_id ? tables[o.table_id] : "—"} onRefresh={load} />)}
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-2">
-        {filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">No orders in this range</div>
-        ) : filtered.map((o) => {
-          const isOpen = open.has(o.id);
-          return (
-            <div key={o.id} className="rounded-xl border border-border bg-card overflow-hidden">
-              <button onClick={() => setOpen((s) => { const n = new Set(s); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n; })} className="w-full p-4 flex items-center gap-4 text-left hover:bg-muted/40">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-sm">#{o.id.slice(0, 8)}</span>
-                    <StatusBadge s={o.status} />
-                    <span className="text-xs text-muted-foreground">{o.waiter_name ?? "—"} · {new Date(o.created_at).toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" })}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">{o.table_id ? `Table ${tables[o.table_id]}` : "—"} · {o.order_type.replace("_"," ")}</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-sm">{formatINR(Number(o.total))}</div>
-                  <div className="text-xs text-muted-foreground capitalize">{o.payment_method ?? "—"}</div>
-                </div>
-                {isOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-              </button>
-              {isOpen && <OrderDetails o={o} />}
-            </div>
-          );
-        })}
+      <div className="flex items-center gap-4 mb-4 text-[12px] text-[#6B7280] px-1">
+        <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#16A34A]" /> Revenue {formatINR(revenue)}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#2563EB]" /> {filtered.length} orders</span>
+        <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#F59E0B]" /> {completed} Completed</span>
       </div>
+
+      {view === "list" ? (
+        <div className="space-y-3">
+          {filtered.length === 0 ? (
+            <Empty label="No orders in this range" />
+          ) : filtered.map((o, idx) => (
+            <OrderCard key={o.id} o={o} idx={idx + 1} expanded={open.has(o.id)} onToggle={() => setOpen((s) => { const n = new Set(s); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n; })} />
+          ))}
+        </div>
+      ) : (
+        <GridView orders={filtered} open={open} setOpen={setOpen} />
+      )}
     </>
   );
 }
 
-function PendingCard({ o, tableNo, onRefresh }: { o: OrderRow; tableNo: string; onRefresh: () => void }) {
-  const [split, setSplit] = useState(1);
-  const [discount, setDiscount] = useState(0);
-  const total = Math.max(0, Number(o.total) - discount);
-  const clear = async () => {
-    await supabase.from("orders").update({ status: "cleared", payment_method: o.payment_method ?? "cash" }).eq("id", o.id);
-    if (o.table_id) await supabase.from("tables").update({ status: "available", occupied_since: null }).eq("id", o.table_id);
-    toast.success("Bill cleared, table available");
-    onRefresh();
-  };
+function StatCard({ tint, iconBg, label, value, sub, icon }: { tint: string; iconBg: string; label: string; value: string; sub?: string; icon: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="font-semibold">Table {tableNo}</div>
-        <div className="font-bold text-primary">{formatINR(total)}</div>
+    <div className="rounded-xl p-4" style={{ backgroundColor: tint }}>
+      <div className="flex items-center gap-2 mb-1">
+        <div className="size-7 rounded-lg text-white text-[14px] font-bold inline-flex items-center justify-center" style={{ backgroundColor: iconBg }}>{icon}</div>
+        <div className="text-[11px] font-bold tracking-wider text-[#6B7280] uppercase">{label}</div>
       </div>
-      <ul className="text-xs text-muted-foreground space-y-0.5 mb-3">
-        {o.items.map((it, k) => <li key={k}>{it.qty}× {it.name}</li>)}
-      </ul>
-      <div className="flex gap-2 mb-3 text-xs">
-        <label className="flex items-center gap-1">Discount ₹<input type="number" value={discount} onChange={(e)=>setDiscount(Number(e.target.value))} className="w-20 h-7 px-2 rounded border border-input bg-background" /></label>
-        <label className="flex items-center gap-1">Split ÷<input type="number" min={1} value={split} onChange={(e)=>setSplit(Math.max(1,Number(e.target.value)))} className="w-14 h-7 px-2 rounded border border-input bg-background" /></label>
-        {split > 1 && <span className="text-muted-foreground">= {formatINR(total/split)} each</span>}
-      </div>
-      <button onClick={clear} className="w-full h-10 rounded-md bg-[#DC2626] text-white text-sm font-bold hover:bg-[#B91C1C]">PAID — CLEAR TABLE</button>
+      <div className="text-[22px] font-bold text-[#111827] leading-tight">{value}</div>
+      {sub && <div className="text-[12px] text-[#6B7280] mt-0.5">{sub}</div>}
     </div>
   );
 }
 
-function OrderDetails({ o }: { o: OrderRow }) {
+function OrderCard({ o, idx, expanded, onToggle }: { o: OrderRow; idx: number; expanded: boolean; onToggle: () => void }) {
+  const codeMatch = (o.note ?? "").match(/Code:([A-Z0-9]+)/);
+  const code = codeMatch ? codeMatch[1] : o.id.slice(0, 4).toUpperCase();
+  const time = new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  const itemsVisible = expanded ? o.items : o.items.slice(0, 2);
+  const more = o.items.length - itemsVisible.length;
+
+  const copy = (text: string) => { navigator.clipboard.writeText(text); toast.success("Copied"); };
+
   return (
-    <div className="border-t border-border p-4 bg-muted/20">
-      <ul className="space-y-1 mb-3">
-        {o.items.map((it, k) => (
-          <li key={k} className="flex justify-between text-sm">
-            <span>{it.qty}× {it.name}</span>
-            <span>{formatINR((it.price ?? 0) * it.qty)}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="border-t border-border pt-2 text-sm space-y-1">
-        <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatINR(Number(o.subtotal))}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">GST 5%</span><span>{formatINR(Number(o.tax))}</span></div>
-        <div className="flex justify-between font-bold"><span>TOTAL</span><span>{formatINR(Number(o.total))}</span></div>
+    <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+      <div className="flex items-start gap-3 flex-wrap">
+        <div className="size-10 rounded-lg bg-[#FEE2E2] text-[#DC2626] inline-flex items-center justify-center shrink-0"><Receipt className="size-5" /></div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-[16px] text-[#111827]">#{idx}</span>
+            <StatusBadge s={o.status} />
+            <span className="text-[12px] text-[#6B7280]">🕐 {time}</span>
+            <span className="text-[11px] bg-[#F1F5F9] text-[#374151] px-2 py-0.5 rounded font-semibold">{o.waiter_name ?? "Manager"}</span>
+          </div>
+          <div className="text-[12px] text-[#6B7280] mt-1">{formatINR(Number(o.subtotal))} + GST 5%</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[18px] font-bold text-[#111827]">{formatINR(Number(o.total))}</div>
+          <div className="text-[13px] text-[#6B7280] capitalize">{o.payment_method ?? "—"}</div>
+        </div>
       </div>
-      <div className="text-xs text-muted-foreground mt-3 font-mono">Order ID: {o.id}</div>
-      <div className="flex gap-2 mt-3">
-        <button className="h-8 px-3 rounded border border-input text-xs font-semibold inline-flex items-center gap-1"><Eye className="size-3" /> View</button>
-        <button className="h-8 px-3 rounded border border-input text-xs font-semibold inline-flex items-center gap-1"><Printer className="size-3" /> Print</button>
-        <button className="h-8 px-3 rounded border border-input text-xs font-semibold inline-flex items-center gap-1"><Pencil className="size-3" /> Edit Order</button>
+
+      <div className="grid grid-cols-3 gap-3 mt-3 text-[12px]">
+        <div><div className="text-[#9CA3AF]">👤 Customer</div><div className="font-semibold text-[#111827] truncate">Walk-in Customer</div></div>
+        <div><div className="text-[#9CA3AF]">🪑 Table</div><div className="font-semibold text-[#111827] truncate">{o.table_id ? "—" : "—"}</div></div>
+        <div><div className="text-[#9CA3AF]">🍽 Type</div><div className="font-semibold text-[#111827] capitalize">{o.order_type.replace("_", " ")}</div></div>
       </div>
+
+      <div className="mt-3 border-t border-[#F1F5F9] pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[13px] font-semibold text-[#111827]">{o.items.length} Items</span>
+          <button onClick={onToggle} className="text-[12px] font-semibold text-[#0D9488] inline-flex items-center gap-1">
+            {expanded ? <>Hide <ChevronUp className="size-3" /></> : <>View <ChevronDown className="size-3" /></>}
+          </button>
+        </div>
+        <ul className="space-y-0.5 text-[13px]">
+          {itemsVisible.map((it, k) => (
+            <li key={k} className="flex justify-between text-[#374151]"><span>{it.qty}× {it.name}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>
+          ))}
+          {!expanded && more > 0 && <li className="text-[12px] text-[#0D9488]">+{more} more...</li>}
+        </ul>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-[#F1F5F9]">
+        <div className="text-[12px] text-[#6B7280] space-y-0.5">
+          <div className="inline-flex items-center gap-1">Order Number #{code} <button onClick={() => copy(code)} className="text-[#9CA3AF] hover:text-[#374151]"><Copy className="size-3" /></button></div>
+          <div className="inline-flex items-center gap-1 ml-3">Order ID {o.id.slice(0, 8)}… <button onClick={() => copy(o.id)} className="text-[#9CA3AF] hover:text-[#374151]"><Copy className="size-3" /></button></div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <ActionBtn icon={Eye} label="View" />
+          <ActionBtn icon={Printer} label="Print" tone="#F59E0B" />
+          <ActionBtn icon={RotateCcw} label="Refund" />
+          <ActionBtn icon={Pencil} label="Edit Details" />
+          <button className="h-8 px-3 rounded-lg bg-[#0D9488] text-white text-[12px] font-semibold inline-flex items-center gap-1"><Pencil className="size-3" /> Edit Items</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActionBtn({ icon: Icon, label, tone }: { icon: React.ComponentType<{ className?: string }>; label: string; tone?: string }) {
+  const color = tone ?? "#374151";
+  return (
+    <button className="h-8 px-3 rounded-lg border text-[12px] font-semibold inline-flex items-center gap-1 hover:bg-[#F9FAFB]"
+      style={{ borderColor: tone ? `${tone}66` : "#E5E7EB", color }}>
+      <Icon className="size-3" /> {label}
+    </button>
+  );
+}
+
+function GridView({ orders, open, setOpen }: { orders: OrderRow[]; open: Set<string>; setOpen: (fn: (s: Set<string>) => Set<string>) => void }) {
+  if (orders.length === 0) return <Empty label="No orders in this range" />;
+  return (
+    <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden">
+      <table className="w-full text-[13px]">
+        <thead className="bg-[#F9FAFB] text-[11px] uppercase text-[#6B7280]">
+          <tr>
+            {["Order", "Time", "Customer", "Table", "Type", "Status", "Payment", "Amount", "Actions"].map((h) => (
+              <th key={h} className="text-left px-3 py-2 font-semibold">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((o, i) => {
+            const expanded = open.has(o.id);
+            return (
+              <>
+                <tr key={o.id} className={`border-t border-[#F1F5F9] cursor-pointer hover:bg-[#F9FAFB] ${i % 2 ? "bg-[#FAFAFA]" : ""}`}
+                  onClick={() => setOpen((s) => { const n = new Set(s); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n; })}>
+                  <td className="px-3 py-2"><div className="font-bold">#{i + 1}</div><div className="text-[11px] text-[#9CA3AF]">{o.id.slice(0, 8)}</div></td>
+                  <td className="px-3 py-2">{new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</td>
+                  <td className="px-3 py-2">Walk-in</td>
+                  <td className="px-3 py-2">{o.table_id ?? "—"}</td>
+                  <td className="px-3 py-2 capitalize">{o.order_type.replace("_", " ")}</td>
+                  <td className="px-3 py-2"><StatusBadge s={o.status} /></td>
+                  <td className="px-3 py-2 capitalize">{o.payment_method ?? "—"}</td>
+                  <td className="px-3 py-2"><div className="font-bold">{formatINR(Number(o.total))}</div><div className="text-[11px] text-[#9CA3AF]">+tax {formatINR(Number(o.tax))}</div></td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button className="size-7 rounded inline-flex items-center justify-center text-[#F59E0B] hover:bg-[#FEF3C7]"><Printer className="size-3.5" /></button>
+                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Eye className="size-3.5" /></button>
+                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Pencil className="size-3.5" /></button>
+                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Pause className="size-3.5" /></button>
+                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><RotateCcw className="size-3.5" /></button>
+                    </div>
+                  </td>
+                </tr>
+                {expanded && (
+                  <tr className="bg-[#F9FAFB]"><td colSpan={9} className="p-4">
+                    <ul className="space-y-0.5 text-[13px]">
+                      {o.items.map((it, k) => <li key={k} className="flex justify-between"><span>{it.qty}× {it.name}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>)}
+                    </ul>
+                  </td></tr>
+                )}
+              </>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 function StatusBadge({ s }: { s: Status }) {
-  const map: Record<Status, string> = {
-    billed: "bg-[#16A34A]/15 text-[#16A34A]",
-    cleared: "bg-[#16A34A]/15 text-[#16A34A]",
-    pending: "bg-[#2563EB]/15 text-[#2563EB]",
-    cooking: "bg-[#D97706]/15 text-[#D97706]",
-    ready: "bg-[#D97706]/15 text-[#D97706]",
-    voided: "bg-[#DC2626]/15 text-[#DC2626]",
+  const map: Record<Status, { bg: string; fg: string; dot: string; label: string }> = {
+    billed:  { bg: "#DCFCE7", fg: "#16A34A", dot: "#16A34A", label: "BILLING COMPLETED" },
+    cleared: { bg: "#DCFCE7", fg: "#16A34A", dot: "#16A34A", label: "CLEARED" },
+    cooking: { bg: "#FEF3C7", fg: "#D97706", dot: "#F59E0B", label: "IN PROGRESS" },
+    pending: { bg: "#FEF3C7", fg: "#D97706", dot: "#F59E0B", label: "IN PROGRESS" },
+    ready:   { bg: "#DBEAFE", fg: "#2563EB", dot: "#2563EB", label: "PENDING BILL" },
+    voided:  { bg: "#FEE2E2", fg: "#DC2626", dot: "#DC2626", label: "VOIDED" },
   };
-  const label: Record<Status, string> = { billed: "BILLING COMPLETED", cleared: "CLEARED", pending: "PENDING", cooking: "IN PROGRESS", ready: "PENDING BILL", voided: "VOIDED" };
-  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${map[s]}`}>{label[s]}</span>;
+  const m = map[s];
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: m.bg, color: m.fg }}>
+      <span className="size-1.5 rounded-full" style={{ backgroundColor: m.dot }} /> {m.label}
+    </span>
+  );
 }
 
-function Stat({ color, label, value, sub }: { color: string; label: string; value: string; sub?: string }) {
+function Empty({ label }: { label: string }) {
   return (
-    <div className="rounded-xl p-4" style={{ background: `${color}15`, border: `1px solid ${color}30` }}>
-      <div className="text-[10px] font-semibold tracking-wider" style={{ color }}>{label}</div>
-      <div className="text-xl font-bold mt-1">{value}</div>
-      {sub && <div className="text-[10px] text-muted-foreground mt-0.5">{sub}</div>}
+    <div className="rounded-xl border border-dashed border-[#E5E7EB] bg-white p-12 text-center text-[14px] text-[#6B7280]">
+      <ClipboardList className="size-12 mx-auto text-[#CBD5E1] mb-3" strokeWidth={1.5} />
+      {label}
     </div>
   );
 }
+
+/* ---------------- Scheduled ---------------- */
 
 function ScheduledTab() {
+  const [period, setPeriod] = useState("Upcoming");
+  const periods = ["Upcoming", "Today", "This Week", "This Month", "All", "Past"];
+  const kotUrl = typeof window !== "undefined" ? `${window.location.origin}/kitchen?print=1` : "/kitchen?print=1";
+  const copy = () => { navigator.clipboard.writeText(kotUrl); toast.success("URL copied"); };
   return (
-    <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
-      <Calendar className="size-12 mx-auto text-muted-foreground mb-3" strokeWidth={1.5} />
-      <p className="text-sm text-muted-foreground">No scheduled orders yet</p>
-    </div>
+    <>
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        {periods.map((p) => (
+          <button key={p} onClick={() => setPeriod(p)} className={`h-9 px-3 rounded-full text-[12px] font-semibold ${period === p ? "bg-[#0D9488] text-white" : "bg-white border border-[#E5E7EB] text-[#6B7280]"}`}>{p}</button>
+        ))}
+      </div>
+      <div className="rounded-xl border border-dashed border-[#E5E7EB] bg-white p-12 text-center mb-6">
+        <Calendar className="size-14 mx-auto text-[#CBD5E1] mb-3" strokeWidth={1.5} />
+        <p className="text-[16px] font-bold text-[#6B7280]">No scheduled orders</p>
+        <p className="text-[13px] text-[#9CA3AF] mt-1">Scheduled orders will appear here when created from the billing page</p>
+      </div>
+      <div className="rounded-xl border border-[#DBEAFE] bg-[#EFF6FF] p-4">
+        <div className="text-[13px] font-semibold text-[#2563EB] mb-1">🖨 KOT Auto-Print Setup:</div>
+        <div className="text-[12px] text-[#374151] mb-2">Open the URL below in Chrome kiosk mode on your kitchen PC to auto-print orders to thermal printer.</div>
+        <div className="flex gap-2">
+          <input readOnly value={kotUrl} className="flex-1 h-10 px-3 rounded-lg bg-[#F1F5F9] border border-[#E5E7EB] font-mono text-[12px]" />
+          <button onClick={copy} className="h-10 px-4 rounded-lg bg-[#0D9488] text-white text-[13px] font-semibold">Copy</button>
+        </div>
+      </div>
+    </>
   );
 }
 
-function SummaryTab() {
-  const [orders, setOrders] = useState<OrderRow[]>([]);
-  useEffect(() => {
-    void supabase.from("orders").select("*").gte("created_at", new Date(new Date().setHours(0,0,0,0)).toISOString()).then(({ data }) => data && setOrders(data as unknown as OrderRow[]));
-  }, []);
-  const revenue = orders.reduce((s, o) => s + Number(o.total), 0);
-  const avg = orders.length ? revenue / orders.length : 0;
-  const counts: Record<string, number> = {};
-  orders.forEach((o) => o.items.forEach((it) => { counts[it.name] = (counts[it.name] ?? 0) + it.qty; }));
-  const top = Object.entries(counts).sort((a,b) => b[1]-a[1])[0]?.[0] ?? "—";
+/* ---------------- Summary ---------------- */
+
+function SummaryTab({ orders }: { orders: OrderRow[] }) {
+  const [period, setPeriod] = useState<Range | "custom">("today");
+  const [search, setSearch] = useState("");
+  const [sortDesc, setSortDesc] = useState(true);
+
+  const periods: (Range | "custom")[] = ["today", "yesterday", "7d", "30d", "custom"];
+
+  const filtered = useMemo(() => {
+    if (period === "custom") return orders;
+    const now = Date.now();
+    const startOfToday = new Date().setHours(0, 0, 0, 0);
+    const cutoff = period === "today" ? startOfToday
+      : period === "yesterday" ? startOfToday - 86400000
+      : period === "7d" ? now - 7 * 86400000 : now - 30 * 86400000;
+    const top = period === "yesterday" ? startOfToday : Infinity;
+    return orders.filter((o) => { const ts = new Date(o.created_at).getTime(); return ts >= cutoff && ts < top; });
+  }, [orders, period]);
+
+  const revenue = filtered.reduce((s, o) => s + Number(o.total), 0);
+  const subtotal = filtered.reduce((s, o) => s + Number(o.subtotal), 0);
+  const avg = filtered.length ? revenue / filtered.length : 0;
+  const itemCount = filtered.reduce((s, o) => s + o.items.reduce((a, b) => a + b.qty, 0), 0);
+  const uniq = new Set(filtered.flatMap((o) => o.items.map((i) => i.name))).size;
+
+  const types: Record<string, number> = {};
+  filtered.forEach((o) => { types[o.order_type] = (types[o.order_type] ?? 0) + 1; });
+
+  const hours: Record<number, number> = {};
+  filtered.forEach((o) => { const h = new Date(o.created_at).getHours(); hours[h] = (hours[h] ?? 0) + 1; });
+  const busiest = Object.entries(hours).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxHour = Math.max(1, ...busiest.map(([, v]) => v));
+
+  const itemAgg: Record<string, { qty: number; revenue: number }> = {};
+  filtered.forEach((o) => o.items.forEach((it) => {
+    const cur = itemAgg[it.name] ?? { qty: 0, revenue: 0 };
+    cur.qty += it.qty;
+    cur.revenue += (it.price ?? 0) * it.qty;
+    itemAgg[it.name] = cur;
+  }));
+  let items = Object.entries(itemAgg).map(([name, v]) => ({ name, ...v }));
+  if (search) items = items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()));
+  items.sort((a, b) => sortDesc ? b.qty - a.qty : a.qty - b.qty);
+  const totalQty = items.reduce((s, i) => s + i.qty, 0);
+  const totalRev = items.reduce((s, i) => s + i.revenue, 0);
+
+  const exportCSV = () => {
+    const rows = [["Item", "Qty", "Revenue"], ...items.map((i) => [i.name, String(i.qty), String(i.revenue)])];
+    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "sales.csv"; a.click(); URL.revokeObjectURL(url);
+  };
+
   return (
     <>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        <Stat color="#16A34A" label="REVENUE" value={formatINR(revenue)} />
-        <Stat color="#2563EB" label="ORDERS" value={String(orders.length)} />
-        <Stat color="#7C3AED" label="AVG ORDER" value={formatINR(avg)} />
-        <Stat color="#D97706" label="TOP DISH" value={top} />
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        {periods.map((p) => (
+          <button key={p} onClick={() => setPeriod(p)} className={`h-9 px-3 rounded-full text-[12px] font-semibold capitalize ${period === p ? "bg-[#0D9488] text-white" : "bg-white border border-[#E5E7EB] text-[#6B7280]"}`}>
+            {p === "7d" ? "7 Days" : p === "30d" ? "30 Days" : p}
+          </button>
+        ))}
       </div>
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/40 text-xs uppercase text-muted-foreground"><tr><th className="text-left p-3">Time</th><th className="text-right p-3">Orders</th><th className="text-right p-3">Revenue</th></tr></thead>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <StatCard tint="#DCFCE7" iconBg="#16A34A" label="REVENUE" value={formatINR(revenue)} sub={`excl. tax: ${formatINR(subtotal)}`} icon="₹" />
+        <StatCard tint="#DBEAFE" iconBg="#2563EB" label="ORDERS" value={String(filtered.length)} sub={`avg ${formatINR(avg)}`} icon="📦" />
+        <StatCard tint="#EDE9FE" iconBg="#7C3AED" label="ITEMS SOLD" value={String(itemCount)} sub={`${uniq} unique items`} icon="📊" />
+        <StatCard tint="#FEF3C7" iconBg="#D97706" label="CUSTOMERS" value={String(filtered.length)} icon="👥" />
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4 mb-5">
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+          <div className="text-[14px] font-bold text-[#111827] mb-3">Order Types</div>
+          {Object.keys(types).length === 0 ? <p className="text-[13px] text-[#6B7280]">No data</p> : Object.entries(types).map(([k, v]) => {
+            const pct = filtered.length ? Math.round((v / filtered.length) * 100) : 0;
+            return (
+              <div key={k} className="mb-2">
+                <div className="flex justify-between text-[13px] text-[#374151]"><span className="capitalize">{k.replace("_", " ")}</span><span>{v} ({pct}%)</span></div>
+                <div className="h-2 rounded-full bg-[#F1F5F9] mt-1 overflow-hidden"><div className="h-full bg-[#0D9488]" style={{ width: `${pct}%` }} /></div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+          <div className="text-[14px] font-bold text-[#111827] mb-3">Busiest Hours</div>
+          {busiest.length === 0 ? <p className="text-[13px] text-[#6B7280]">No data</p> : busiest.map(([h, v]) => {
+            const pct = (v / maxHour) * 100;
+            const intensity = Math.round(255 - (pct * 0.5));
+            return (
+              <div key={h} className="flex items-center gap-2 mb-1.5 text-[12px]">
+                <span className="w-12 text-[#6B7280]">{h}:00</span>
+                <div className="flex-1 h-5 rounded bg-[#F1F5F9] overflow-hidden">
+                  <div className="h-full" style={{ width: `${pct}%`, background: `rgb(245,${intensity},11)` }} />
+                </div>
+                <span className="w-6 text-right text-[#374151] font-semibold">{v}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-[#F1F5F9]">
+          <div className="text-[14px] font-bold text-[#111827]">Item-wise Sales <span className="text-[#6B7280] font-normal">({items.length} Items)</span></div>
+          <div className="flex items-center gap-2">
+            <button onClick={exportCSV} className="h-8 px-3 rounded-lg bg-[#16A34A] text-white text-[12px] font-semibold inline-flex items-center gap-1"><FileSpreadsheet className="size-3" /> CSV</button>
+            <button onClick={exportCSV} className="h-8 px-3 rounded-lg bg-[#16A34A] text-white text-[12px] font-semibold inline-flex items-center gap-1"><FileSpreadsheet className="size-3" /> Excel</button>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items..." className="h-8 px-3 rounded-lg border border-[#E5E7EB] text-[12px] w-[160px]" />
+          </div>
+        </div>
+        <table className="w-full text-[13px]">
+          <thead className="bg-[#F9FAFB] text-[11px] uppercase text-[#6B7280]">
+            <tr>
+              <th className="text-left px-3 py-2">#</th>
+              <th className="text-left px-3 py-2">Item</th>
+              <th className="text-left px-3 py-2"><button onClick={() => setSortDesc(!sortDesc)} className="inline-flex items-center gap-1">Qty <ArrowUpDown className="size-3" /></button></th>
+              <th className="text-left px-3 py-2">Revenue</th>
+              <th className="text-left px-3 py-2">% of total</th>
+            </tr>
+          </thead>
           <tbody>
-            {Array.from({ length: 12 }).map((_, h) => {
-              const hour = h + 10;
-              const slot = orders.filter((o) => new Date(o.created_at).getHours() === hour);
-              return <tr key={h} className="border-t border-border"><td className="p-3">{hour}:00</td><td className="p-3 text-right">{slot.length}</td><td className="p-3 text-right">{formatINR(slot.reduce((s,o)=>s+Number(o.total),0))}</td></tr>;
+            {items.length === 0 ? (
+              <tr><td colSpan={5} className="p-6 text-center text-[#6B7280]">No items</td></tr>
+            ) : items.map((it, i) => {
+              const pct = totalQty ? (it.qty / totalQty) * 100 : 0;
+              const rank = i === 0 ? { label: "1st", bg: "#FEF3C7", fg: "#D97706" } : i === 1 ? { label: "2nd", bg: "#F1F5F9", fg: "#6B7280" } : i === 2 ? { label: "3rd", bg: "#FED7AA", fg: "#9A3412" } : null;
+              return (
+                <tr key={it.name} className="border-t border-[#F1F5F9]">
+                  <td className="px-3 py-2 text-[#6B7280]">{rank ? <span className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: rank.bg, color: rank.fg }}>{rank.label}</span> : i + 1}</td>
+                  <td className="px-3 py-2 text-[#111827]">{it.name}</td>
+                  <td className="px-3 py-2"><span className="inline-block bg-[#F0FDFA] text-[#0D9488] font-semibold px-2 py-0.5 rounded-full text-[12px]">{it.qty}</span></td>
+                  <td className="px-3 py-2 text-[#111827]">{formatINR(it.revenue)}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 rounded-full bg-[#F1F5F9] overflow-hidden"><div className="h-full bg-[#EC4899]" style={{ width: `${pct}%` }} /></div>
+                      <span className="text-[12px] text-[#6B7280] w-10 text-right">{pct.toFixed(1)}%</span>
+                    </div>
+                  </td>
+                </tr>
+              );
             })}
           </tbody>
+          {items.length > 0 && (
+            <tfoot>
+              <tr className="border-t-2 border-[#0D9488] font-bold bg-[#F0FDFA]">
+                <td className="px-3 py-2">Total</td>
+                <td className="px-3 py-2"></td>
+                <td className="px-3 py-2"><span className="inline-block bg-[#0D9488] text-white px-2 py-0.5 rounded-full text-[12px]">{totalQty}</span></td>
+                <td className="px-3 py-2 text-[#0D9488]">{formatINR(totalRev)}</td>
+                <td className="px-3 py-2 text-[#0D9488]">100%</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </>
+  );
+}
+
+/* ---------------- Bookings Embed ---------------- */
+
+function BookingsEmbed() {
+  return (
+    <div className="rounded-xl border border-[#E5E7EB] bg-white p-6 text-center">
+      <Calendar className="size-12 mx-auto text-[#CBD5E1] mb-3" strokeWidth={1.5} />
+      <p className="text-[14px] text-[#6B7280] mb-3">Bookings management has moved to its own page.</p>
+      <Link to="/bookings" className="inline-flex items-center gap-1 h-10 px-4 rounded-lg bg-[#0D9488] text-white text-[13px] font-semibold">
+        <Plus className="size-4" /> Open Bookings
+      </Link>
+    </div>
   );
 }
