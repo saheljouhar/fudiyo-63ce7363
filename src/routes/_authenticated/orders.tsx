@@ -480,12 +480,42 @@ function OrdersPage() {
                   <option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option>
                 </select>
               </div>
-              {showAddr ? (
-                <input value={deliveryAddr} onChange={(e) => setDeliveryAddr(e.target.value)} placeholder="Delivery address" className="w-full h-9 rounded border border-[#FCD34D] bg-white px-2 text-[12px]" />
-              ) : (
+              {!showAddr && !deliveryAddr && (
                 <div className="flex items-center justify-between text-[12px] text-[#92400E]">
                   <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" /> No delivery address</span>
-                  <button onClick={() => setShowAddr(true)} className="size-6 rounded bg-[#0D9488] text-white inline-flex items-center justify-center"><PlusIcon className="size-3.5" /></button>
+                  <button onClick={() => setShowAddr(true)} className="size-7 rounded bg-[#0D9488] text-white inline-flex items-center justify-center"><PlusIcon className="size-3.5" /></button>
+                </div>
+              )}
+              {!showAddr && deliveryAddr && (
+                <div className="flex items-start justify-between gap-2 text-[12px] text-[#111827] bg-white rounded-lg border border-[#FCD34D] px-2 py-1.5">
+                  <span className="inline-flex items-start gap-1.5 min-w-0"><MapPin className="size-3.5 mt-0.5 text-[#0D9488] shrink-0" /><span className="truncate">{deliveryAddr}</span></span>
+                  <button onClick={() => { setDeliveryAddr(""); setAddrForm({ street: "", landmark: "", city: "", state: "", pincode: "" }); }} className="text-[#9CA3AF] hover:text-[#DC2626] shrink-0"><X className="size-3.5" /></button>
+                </div>
+              )}
+              {showAddr && (
+                <div className="bg-white border border-[#E5E7EB] rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-bold uppercase text-[#111827]">Delivery Address</span>
+                    <button onClick={() => setShowAddr(false)} className="size-6 text-[#9CA3AF] hover:text-[#374151] inline-flex items-center justify-center"><X className="size-4" /></button>
+                  </div>
+                  <input value={addrForm.street} onChange={(e) => setAddrForm((f) => ({ ...f, street: e.target.value }))} placeholder="Building / Street" className="w-full h-9 rounded-lg border border-[#E5E7EB] px-2 text-[12px]" />
+                  <input value={addrForm.landmark} onChange={(e) => setAddrForm((f) => ({ ...f, landmark: e.target.value }))} placeholder="Landmark" className="w-full h-9 rounded-lg border border-[#E5E7EB] px-2 text-[12px]" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={addrForm.city} onChange={(e) => setAddrForm((f) => ({ ...f, city: e.target.value }))} placeholder="City" className="h-9 rounded-lg border border-[#E5E7EB] px-2 text-[12px]" />
+                    <input value={addrForm.state} onChange={(e) => setAddrForm((f) => ({ ...f, state: e.target.value }))} placeholder="State" className="h-9 rounded-lg border border-[#E5E7EB] px-2 text-[12px]" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={addrForm.pincode} onChange={(e) => setAddrForm((f) => ({ ...f, pincode: e.target.value }))} placeholder="Pincode" className="h-11 rounded-lg border border-[#E5E7EB] px-2 text-[12px]" />
+                    <button
+                      onClick={() => {
+                        const parts = [addrForm.street, addrForm.landmark, addrForm.city, addrForm.state, addrForm.pincode].filter(Boolean);
+                        if (!parts.length) return;
+                        setDeliveryAddr(parts.join(", "));
+                        setShowAddr(false);
+                      }}
+                      className="h-11 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[13px] font-semibold"
+                    >Save</button>
+                  </div>
                 </div>
               )}
             </div>
