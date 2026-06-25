@@ -3,7 +3,7 @@ import { useState } from "react";
 import {
   Package, Sparkles, ClipboardList, Plus, Zap, Trash2, Download,
   Search, BookOpen, UtensilsCrossed, Clock, ShoppingCart, TrendingUp,
-  Recycle, FileText, ArrowUpDown,
+  Recycle, ArrowUpDown,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
@@ -219,5 +219,3 @@ function StatCard({ label, value, color, icon }: { label: string; value: string;
   );
 }
 
-// Silence unused-import warnings (kept for future tabs)
-void FileText;
