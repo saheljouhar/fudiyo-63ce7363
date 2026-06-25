@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Volume2, VolumeX, RefreshCw, Eye, MoreVertical, ChefHat } from "lucide-react";
+import {
+  Volume2, VolumeX, RefreshCw, Eye, MoreVertical, ChefHat, Check,
+  ChevronDown, Printer, X, Play, Calendar,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/kitchen")({
@@ -10,8 +13,10 @@ export const Route = createFileRoute("/_authenticated/kitchen")({
 });
 
 type Status = "pending" | "cooking" | "ready" | "billed" | "cleared" | "voided";
-type Tab = "new" | "cooking" | "ready" | "done";
-const TAB_TO_STATUS: Record<Tab, Status> = { new: "pending", cooking: "cooking", ready: "ready", done: "billed" };
+type Tab = "all" | "new" | "cooking" | "ready" | "done";
+const TAB_TO_STATUS: Record<Exclude<Tab, "all">, Status> = {
+  new: "pending", cooking: "cooking", ready: "ready", done: "billed",
+};
 
 interface OrderItem { name: string; qty: number; note?: string }
 interface Order {
@@ -28,10 +33,11 @@ interface Order {
 function KitchenPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tables, setTables] = useState<Record<string, string>>({});
-  const [tab, setTab] = useState<Tab>("new");
+  const [tab, setTab] = useState<Tab>("all");
   const [muted, setMuted] = useState(() => typeof window !== "undefined" && localStorage.getItem("kds-muted") === "1");
   const [flash, setFlash] = useState(false);
-  const [pulse, setPulse] = useState<Set<string>>(new Set());
+  const [splash, setSplash] = useState<Record<string, string>>({});
+  const [detail, setDetail] = useState<Order | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
   const audioCtxRef = useRef<AudioContext | null>(null);
 
@@ -77,8 +83,6 @@ function KitchenPage() {
             setFlash(true);
             setTimeout(() => setFlash(false), 200);
             beep();
-            setPulse((p) => new Set(p).add(id));
-            setTimeout(() => setPulse((p) => { const n = new Set(p); n.delete(id); return n; }), 3000);
           }
         }
         void load();
@@ -95,16 +99,22 @@ function KitchenPage() {
   useEffect(() => { localStorage.setItem("kds-muted", muted ? "1" : "0"); }, [muted]);
 
   const counts = useMemo(() => ({
+    all: orders.filter((o) => o.status === "pending" || o.status === "cooking" || o.status === "ready").length,
     new: orders.filter((o) => o.status === "pending").length,
     cooking: orders.filter((o) => o.status === "cooking").length,
     ready: orders.filter((o) => o.status === "ready").length,
     done: orders.filter((o) => o.status === "billed").length,
   }), [orders]);
 
-  const visible = orders.filter((o) => o.status === TAB_TO_STATUS[tab]);
+  const visible = tab === "all"
+    ? orders.filter((o) => o.status === "pending" || o.status === "cooking" || o.status === "ready")
+    : orders.filter((o) => o.status === TAB_TO_STATUS[tab]);
 
   const advance = async (o: Order) => {
     const next: Status = o.status === "pending" ? "cooking" : o.status === "cooking" ? "ready" : "billed";
+    const label = next === "cooking" ? "Moved to Cooking" : next === "ready" ? "Moved to Ready" : "Order Complete";
+    setSplash((s) => ({ ...s, [o.id]: label }));
+    setTimeout(() => setSplash((s) => { const n = { ...s }; delete n[o.id]; return n; }), 1500);
     const { error } = await supabase.from("orders").update({ status: next }).eq("id", o.id);
     if (error) { toast.error(error.message); return; }
     if (next === "billed") {
@@ -112,93 +122,238 @@ function KitchenPage() {
     }
   };
 
+  const tabPills: { key: Tab; label: string }[] = [
+    { key: "all", label: "All Active" },
+    { key: "new", label: "New" },
+    { key: "cooking", label: "Cooking" },
+    { key: "ready", label: "Ready" },
+    { key: "done", label: "Done" },
+  ];
+
   return (
-    <div className="min-h-screen -mx-6 -mt-4 px-6 pt-4 bg-[#111827] text-white">
-      {flash && <div className="fixed inset-0 z-50 bg-amber-400/40 pointer-events-none animate-pulse" />}
-      <header className="flex items-center justify-between pb-4 border-b border-white/10">
-        <div>
-          <h1 className="text-2xl font-bold">Kitchen Display</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Fudiyo Kitchen · {counts.new + counts.cooking + counts.ready} order(s) in queue · <span className="text-green-400">🟢 Live</span></p>
+    <div className="min-h-screen -mx-6 -mt-4 px-6 pt-5 pb-8 bg-[#0F172A] text-white">
+      {flash && <div className="fixed inset-0 z-50 bg-amber-400/30 pointer-events-none animate-pulse" />}
+      <header className="flex items-center justify-between pb-4">
+        <div className="flex items-center gap-3">
+          <div className="size-10 rounded-lg bg-[#1E293B] inline-flex items-center justify-center">
+            <ChefHat className="size-6 text-[#0D9488]" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-white leading-tight">Kitchen Display</h1>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Fudiyo Kitchen · {counts.all} order(s) in queue ·{" "}
+              <span className="inline-flex items-center gap-1 text-[#16A34A]">
+                <span className="inline-block size-1.5 rounded-full bg-[#16A34A] animate-pulse" /> Live
+              </span>
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setMuted((m) => !m)} className="size-10 rounded-md border border-white/20 inline-flex items-center justify-center hover:bg-white/10">
+        <div className="flex gap-2 items-center">
+          <button className="h-10 px-3 rounded-md border border-white/20 inline-flex items-center gap-1.5 text-sm hover:bg-white/10">
+            <Calendar className="size-4" /> Today <ChevronDown className="size-3.5" />
+          </button>
+          <button onClick={() => setMuted((m) => !m)} title={muted ? "Unmute" : "Mute"} className="size-10 rounded-md border border-white/20 inline-flex items-center justify-center hover:bg-white/10">
             {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
           </button>
-          <button onClick={load} className="h-10 px-4 rounded-md border border-white/20 inline-flex items-center gap-2 text-sm hover:bg-white/10">
+          <button onClick={load} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] inline-flex items-center gap-2 text-sm font-semibold text-white">
             <RefreshCw className="size-4" /> Refresh
           </button>
         </div>
       </header>
 
-      <div className="flex gap-2 my-5">
-        {(["new", "cooking", "ready", "done"] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded-full text-sm font-semibold capitalize border-b-2 transition ${tab === t ? "border-[#14B8A6] text-white" : "border-transparent text-gray-400 hover:text-white"}`}
-          >
-            {t}: {counts[t]}
-          </button>
-        ))}
+      <div className="flex gap-2 my-5 flex-wrap">
+        {tabPills.map((t) => {
+          const active = tab === t.key;
+          const count = counts[t.key];
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`h-10 px-4 rounded-full text-sm font-semibold inline-flex items-center gap-2 transition ${
+                active ? "bg-[#0D9488] text-white" : "bg-transparent border border-white/20 text-white hover:bg-white/10"
+              }`}
+            >
+              {t.label}
+              <span className={`min-w-[22px] text-center text-xs font-bold px-1.5 py-0.5 rounded-full ${active ? "bg-white/20" : "bg-white/10"}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {visible.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-gray-500">
-          <ChefHat className="size-16 mb-4" strokeWidth={1.5} />
-          <p className="text-xl">No {tab} orders</p>
+        <div className="flex flex-col items-center justify-center py-32 text-center">
+          <ChefHat className="size-20 mb-5 text-gray-600" strokeWidth={1.5} />
+          <p className="text-xl font-semibold text-gray-300">No active orders</p>
+          <p className="text-sm text-gray-500 mt-1">New orders will appear here when they come in.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
           {visible.map((o, i) => (
-            <KdsCard key={o.id} o={o} index={i + 1} tableNo={o.table_id ? tables[o.table_id] : null} tab={tab} pulsing={pulse.has(o.id)} onAdvance={() => advance(o)} />
+            <KdsCard
+              key={o.id}
+              o={o}
+              index={i + 1}
+              tableNo={o.table_id ? tables[o.table_id] : null}
+              splash={splash[o.id]}
+              onAdvance={() => advance(o)}
+              onView={() => setDetail(o)}
+            />
           ))}
         </div>
       )}
+
+      {detail && <DetailModal o={detail} tableNo={detail.table_id ? tables[detail.table_id] : null} onClose={() => setDetail(null)} />}
     </div>
   );
 }
 
-function KdsCard({ o, index, tableNo, tab, pulsing, onAdvance }: { o: Order; index: number; tableNo: string | null; tab: Tab; pulsing: boolean; onAdvance: () => void }) {
-  const [elapsed, setElapsed] = useState("0:00");
+function KdsCard({
+  o, index, tableNo, splash, onAdvance, onView,
+}: {
+  o: Order; index: number; tableNo: string | null;
+  splash?: string; onAdvance: () => void; onView: () => void;
+}) {
+  const [elapsed, setElapsed] = useState("0m");
+  const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
     const tick = () => {
       const s = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 1000);
-      setElapsed(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
+      const m = Math.floor(s / 60);
+      setElapsed(m < 1 ? `${s}s` : `${m}m`);
     };
     tick(); const id = setInterval(tick, 1000); return () => clearInterval(id);
   }, [o.created_at]);
 
-  const btn = tab === "new" ? { label: "START COOKING", cls: "bg-[#2563EB] hover:bg-[#1D4ED8]" }
-    : tab === "cooking" ? { label: "MARK READY", cls: "bg-[#14B8A6] hover:bg-[#0F9C8E]" }
-    : tab === "ready" ? { label: "DONE ✓", cls: "bg-[#16A34A] hover:bg-[#15803D]" }
-    : null;
+  const meta =
+    o.status === "pending"
+      ? { left: "border-l-[#F59E0B]", badge: "NEW", badgeCls: "bg-[#F59E0B]/15 text-[#F59E0B]", btn: { label: "START COOKING", icon: <Play className="size-4" />, cls: "bg-[#F59E0B] hover:bg-[#D97706]" } }
+      : o.status === "cooking"
+      ? { left: "border-l-[#3B82F6]", badge: "COOKING", badgeCls: "bg-[#3B82F6]/15 text-[#3B82F6]", btn: { label: "MARK READY", icon: <Check className="size-4" />, cls: "bg-[#3B82F6] hover:bg-[#2563EB]" } }
+      : o.status === "ready"
+      ? { left: "border-l-[#16A34A]", badge: "READY", badgeCls: "bg-[#16A34A]/15 text-[#16A34A]", btn: { label: "MARK DONE", icon: <Check className="size-4" />, cls: "bg-[#16A34A] hover:bg-[#15803D]" } }
+      : { left: "border-l-gray-400", badge: "DONE", badgeCls: "bg-gray-200 text-gray-700", btn: null };
+
+  const shortId = o.id.slice(0, 6).toUpperCase();
 
   return (
-    <div className={`rounded-xl bg-[#1F2937] p-4 ${pulsing ? "ring-2 ring-[#14B8A6] animate-pulse" : ""}`}>
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="text-xl font-bold">#{index}</div>
-        {tableNo && <span className="text-xs font-semibold bg-[#14B8A6]/20 text-[#14B8A6] px-2 py-0.5 rounded">T{tableNo}</span>}
-        <span className="text-xs bg-white/10 text-gray-300 px-2 py-0.5 rounded capitalize">{o.order_type.replace("_", " ")}</span>
-        <span className="text-xs text-[#60A5FA] ml-auto">🕐 {elapsed}</span>
-        <Eye className="size-4 text-gray-400" />
-        <MoreVertical className="size-4 text-gray-400" />
-      </div>
-      <div className="border-t border-white/10 my-3" />
-      <div className="text-[11px] uppercase text-gray-400 mb-2">{o.items.length} item(s)</div>
-      <ul className="space-y-1.5 mb-4">
-        {o.items.map((it, k) => (
-          <li key={k}>
-            <div className="text-base">{it.qty}× {it.name}</div>
-            {it.note && <div className="text-xs text-amber-400">⚠ {it.note}</div>}
-          </li>
-        ))}
-        {o.note && <li className="text-xs text-amber-400">⚠ {o.note}</li>}
-      </ul>
-      {btn && (
-        <button onClick={onAdvance} className={`w-full h-11 rounded-md text-white font-bold text-sm tracking-wide transition ${btn.cls}`}>
-          {btn.label}
-        </button>
+    <div className={`relative rounded-xl bg-white text-gray-900 border-l-4 ${meta.left} shadow-lg overflow-hidden`}>
+      {splash && (
+        <div className="absolute inset-0 z-10 bg-[#16A34A] flex flex-col items-center justify-center text-white animate-in fade-in zoom-in duration-200">
+          <Check className="size-12" strokeWidth={3} />
+          <div className="mt-2 text-base font-bold">{splash}</div>
+        </div>
       )}
+      <div className="p-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full ${meta.badgeCls}`}>{meta.badge}</span>
+          <span className="text-base font-bold">#{index}</span>
+          <span className="text-xs text-gray-500">{o.order_type === "dine_in" ? `Dine In${tableNo ? ` · T${tableNo}` : ""}` : o.order_type.replace("_", " ")}</span>
+          <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-[#16A34A] bg-[#16A34A]/10 px-2 py-0.5 rounded-full">
+            ⏱ {elapsed}
+          </span>
+          <button onClick={onView} className="size-7 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-500" title="View details">
+            <Eye className="size-4" />
+          </button>
+        </div>
+        <div className="text-[11px] text-gray-400 mt-1">ID: {shortId}</div>
+        <div className="border-t my-3" />
+        <ul className="space-y-0">
+          {o.items.map((it, k) => (
+            <li key={k} className="py-1.5 border-b last:border-b-0 border-gray-100">
+              <div className="text-sm">
+                <span className="font-semibold text-gray-900">{it.qty}×</span> {it.name}
+              </div>
+              {it.note && <div className="text-[11px] text-amber-700">⚠ {it.note}</div>}
+            </li>
+          ))}
+          {o.note && <li className="py-1 text-[11px] text-amber-700">⚠ {o.note}</li>}
+        </ul>
+        {meta.btn && (
+          <div className="flex items-center gap-2 mt-4">
+            <button onClick={onAdvance} className={`flex-1 h-11 rounded-md inline-flex items-center justify-center gap-2 text-white font-bold text-sm tracking-wide transition ${meta.btn.cls}`}>
+              {meta.btn.icon} {meta.btn.label}
+            </button>
+            <div className="relative">
+              <button onClick={() => setMenuOpen((v) => !v)} className="size-11 rounded-md border border-gray-200 inline-flex items-center justify-center hover:bg-gray-50" title="More">
+                <MoreVertical className="size-4 text-gray-500" />
+              </button>
+              {menuOpen && (
+                <>
+                  <button onClick={() => setMenuOpen(false)} className="fixed inset-0 z-10" aria-label="close" />
+                  <div className="absolute right-0 top-12 z-20 w-44 bg-white border border-gray-200 rounded-md shadow-lg py-1 text-sm text-gray-800">
+                    <MenuItem onClick={() => { setMenuOpen(false); onView(); }}>View Details</MenuItem>
+                    <MenuItem onClick={() => { setMenuOpen(false); window.print(); }}><Printer className="size-3.5" /> Print KOT</MenuItem>
+                    <MenuItem onClick={() => setMenuOpen(false)}>Cancel</MenuItem>
+                    <MenuItem onClick={() => setMenuOpen(false)} danger>Delete</MenuItem>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MenuItem({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left px-3 py-2 inline-flex items-center gap-2 hover:bg-gray-50 ${danger ? "text-[#DC2626]" : ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DetailModal({ o, tableNo, onClose }: { o: Order; tableNo: string | null; onClose: () => void }) {
+  const created = new Date(o.created_at);
+  const elapsedM = Math.floor((Date.now() - created.getTime()) / 60000);
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <div className="bg-white text-gray-900 rounded-xl shadow-2xl w-full max-w-xl overflow-hidden">
+        <div className="p-5 border-b flex items-start gap-3">
+          <div className="size-10 rounded-lg bg-[#FEE2E2] inline-flex items-center justify-center">
+            <ChefHat className="size-5 text-[#DC2626]" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold">Order #{o.round || 1}</h2>
+            <p className="text-xs text-gray-500">ID: {o.id.slice(0, 6).toUpperCase()} · {o.order_type === "dine_in" ? `Dine In${tableNo ? ` · T${tableNo}` : ""}` : o.order_type.replace("_", " ")}</p>
+          </div>
+          <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
+        </div>
+        <div className="grid grid-cols-4 gap-2 p-5 border-b text-center">
+          {[
+            { label: "ORDER TIME", value: created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
+            { label: "KOT TIME", value: created.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
+            { label: "ELAPSED", value: `${elapsedM}m` },
+            { label: "CUSTOMER", value: "—" },
+          ].map((c) => (
+            <div key={c.label}>
+              <div className="text-[10px] font-semibold text-gray-500 tracking-wider">{c.label}</div>
+              <div className="text-sm font-bold mt-0.5">{c.value}</div>
+            </div>
+          ))}
+        </div>
+        <div className="p-5 max-h-72 overflow-y-auto">
+          {o.items.map((it, i) => (
+            <div key={i} className="flex items-center gap-3 py-2 border-b last:border-b-0">
+              <div className="text-base font-bold w-8">{it.qty}×</div>
+              <div className="flex-1 text-sm">{it.name}</div>
+              <span className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Main</span>
+            </div>
+          ))}
+        </div>
+        <div className="p-4 bg-gray-50 flex gap-2 justify-end">
+          <button onClick={onClose} className="h-10 px-4 rounded-md border border-gray-300 text-sm font-semibold hover:bg-gray-100">Close</button>
+          <button onClick={() => window.print()} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
+            <Printer className="size-4" /> Print KOT
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
