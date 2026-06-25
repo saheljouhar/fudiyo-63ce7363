@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { formatINR } from "@/lib/format";
-import { Plus, Pencil, Trash2, Copy, Search, Camera, Eye, Star } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, Search, Camera, Eye, Star, Upload, QrCode, Image as ImageIcon, ImageOff, LayoutGrid, List, X, Download } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/menu")({
@@ -27,6 +27,10 @@ function MenuPage() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [hideImages, setHideImages] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [editing, setEditing] = useState<Partial<Dish> | null>(null);
 
   const load = async () => {
@@ -85,6 +89,18 @@ function MenuPage() {
         }
       />
 
+      {/* Action toolbar */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <ToolBtn color="#DC2626" onClick={() => toast.info("Upload menu — coming soon")}><Upload className="size-4" /> Upload</ToolBtn>
+        <ToolBtn color="#F59E0B" onClick={() => toast.info("Bulk photo upload — coming soon")}><Camera className="size-4" /> Photo</ToolBtn>
+        <ToolBtn color="#0D9488" onClick={() => setShowQr(true)}><QrCode className="size-4" /> QR Code</ToolBtn>
+        <ToolBtn outline color="#0D9488" onClick={() => toast.info("Theme customizer — coming soon")}><Eye className="size-4" /> Customize</ToolBtn>
+        <ToolBtn outline color="#16A34A" onClick={() => setHideImages((v) => !v)}>
+          {hideImages ? <ImageIcon className="size-4" /> : <ImageOff className="size-4" />} {hideImages ? "Show Images" : "Hide Images"}
+        </ToolBtn>
+        <ToolBtn outline color="#DC2626" onClick={() => toast.error("Delete All requires confirmation in next phase")}><Trash2 className="size-4" /> Delete All</ToolBtn>
+      </div>
+
       <div className="flex flex-wrap gap-3 mb-5">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -95,10 +111,19 @@ function MenuPage() {
             className="w-full h-10 pl-10 pr-3 rounded-md border border-input bg-card text-sm"
           />
         </div>
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="h-10 px-3 rounded-md border border-input bg-card text-sm">
+          <option value="all">All Types</option>
+          <option value="veg">Veg</option>
+          <option value="non_veg">Non-Veg</option>
+        </select>
         <select value={cat} onChange={(e) => setCat(e.target.value)} className="h-10 px-3 rounded-md border border-input bg-card text-sm">
           <option value="all">All Categories</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
+        <div className="inline-flex rounded-md border border-input bg-card overflow-hidden">
+          <button onClick={() => setView("grid")} className={`size-10 inline-flex items-center justify-center ${view === "grid" ? "bg-[#0D9488] text-white" : "text-muted-foreground"}`} title="Grid"><LayoutGrid className="size-4" /></button>
+          <button onClick={() => setView("list")} className={`size-10 inline-flex items-center justify-center ${view === "list" ? "bg-[#0D9488] text-white" : "text-muted-foreground"}`} title="List"><List className="size-4" /></button>
+        </div>
       </div>
 
       {visible.length === 0 ? (
@@ -106,46 +131,97 @@ function MenuPage() {
           No dishes match. <button onClick={() => setEditing({})} className="text-primary font-semibold">Add one</button>.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className={view === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "flex flex-col gap-2"}>
           {visible.map((d, i) => (
-            <DishCard key={d.id} d={d} index={i + 1} onEdit={() => setEditing(d)} onDup={() => duplicate(d)} onDel={() => del(d)} onToggle={() => toggleAvail(d)} />
+            <DishCard key={d.id} d={d} index={i + 1} hideImage={hideImages} onEdit={() => setEditing(d)} onDup={() => duplicate(d)} onDel={() => del(d)} onToggle={() => toggleAvail(d)} />
           ))}
         </div>
       )}
 
       {editing && <DishDrawer initial={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+      {showQr && <QrModal onClose={() => setShowQr(false)} />}
     </main>
   );
 }
 
-function DishCard({ d, index, onEdit, onDup, onDel, onToggle }: { d: Dish; index: number; onEdit: () => void; onDup: () => void; onDel: () => void; onToggle: () => void }) {
+function ToolBtn({ children, onClick, color, outline }: { children: React.ReactNode; onClick: () => void; color: string; outline?: boolean }) {
+  const style: React.CSSProperties = outline
+    ? { borderColor: color, color }
+    : { backgroundColor: color, color: "white" };
+  return (
+    <button
+      onClick={onClick}
+      className={`h-9 px-3 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition ${outline ? "border-2 bg-white hover:bg-gray-50" : "hover:opacity-90"}`}
+      style={style}
+    >
+      {children}
+    </button>
+  );
+}
+
+function QrModal({ onClose }: { onClose: () => void }) {
+  const url = typeof window !== "undefined" ? `${window.location.origin}/menu` : "/menu";
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(url)}`;
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="p-5 border-b flex items-center justify-between">
+          <h2 className="text-base font-bold">Menu QR Code</h2>
+          <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
+        </div>
+        <div className="p-6 text-center">
+          <img src={qrSrc} alt="Menu QR" className="mx-auto rounded-lg border" />
+          <p className="text-xs text-muted-foreground mt-3 break-all">{url}</p>
+        </div>
+        <div className="p-4 bg-gray-50 flex gap-2 justify-end">
+          <button
+            onClick={() => { navigator.clipboard.writeText(url); toast.success("URL copied"); }}
+            className="h-10 px-4 rounded-md border border-gray-300 text-sm font-semibold hover:bg-gray-100 inline-flex items-center gap-2"
+          >
+            <Copy className="size-4" /> Copy URL
+          </button>
+          <a
+            href={qrSrc}
+            download="fudiyo-menu-qr.png"
+            className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2"
+          >
+            <Download className="size-4" /> Download
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DishCard({ d, index, hideImage, onEdit, onDup, onDel, onToggle }: { d: Dish; index: number; hideImage?: boolean; onEdit: () => void; onDup: () => void; onDel: () => void; onToggle: () => void }) {
   return (
     <div className={`rounded-xl border border-border bg-card overflow-hidden shadow-card transition ${!d.is_available ? "opacity-70" : ""}`}>
-      <div className="relative h-40 bg-primary/10 flex items-center justify-center">
-        {d.photo_url ? (
-          <img src={d.photo_url} alt={d.name} className="size-full object-cover" />
-        ) : (
-          <div className="text-primary text-4xl font-bold">{d.name[0]?.toUpperCase()}</div>
-        )}
-        <span className="absolute top-2 left-2 size-3 rounded-full bg-[#16A34A] border-2 border-white" title="Vegetarian" />
-        <span className={`absolute top-2 right-2 size-3 rounded-full border-2 border-white ${d.is_available ? "bg-[#16A34A]" : "bg-[#DC2626]"}`} />
-        <span className="absolute bottom-2 left-2 text-[10px] font-semibold bg-black/60 text-white px-2 py-0.5 rounded">#{index}</span>
-      </div>
+      {!hideImage && (
+        <div className="relative h-44 bg-[#0D9488]/10 flex items-center justify-center">
+          {d.photo_url ? (
+            <img src={d.photo_url} alt={d.name} className="size-full object-cover" />
+          ) : (
+            <div className="text-[#0D9488] text-5xl font-bold">{d.name[0]?.toUpperCase()}</div>
+          )}
+          <span className="absolute top-2 left-2 size-3.5 rounded-full bg-[#16A34A] border-2 border-white shadow" title="Vegetarian" />
+          <span className="absolute bottom-2 right-2 text-[10px] font-bold bg-black/70 text-white px-2 py-0.5 rounded-full">#{index}</span>
+        </div>
+      )}
       <div className="p-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="font-semibold text-sm leading-tight">{d.name}</div>
-          <div className="text-sm font-bold text-primary">{formatINR(d.price)}</div>
+          <div className="font-semibold text-[16px] leading-tight">{d.name}</div>
+          <div className="text-base font-bold text-[#0D9488] tabular-nums">{formatINR(d.price)}</div>
         </div>
-        <div className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded inline-block mt-1">{d.category}</div>
+        <div className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded inline-block mt-1.5">{d.category}</div>
         {d.description && <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{d.description}</div>}
         <div className="flex items-center justify-between mt-3 gap-1">
-          <IconBtn title="View"><Eye className="size-4" /></IconBtn>
-          <IconBtn title="Feature"><Star className="size-4" /></IconBtn>
           <IconBtn title="Edit" onClick={onEdit} className="text-[#2563EB]"><Pencil className="size-4" /></IconBtn>
-          <IconBtn title="Duplicate" onClick={onDup} className="text-[#16A34A]"><Copy className="size-4" /></IconBtn>
-          <IconBtn title="Toggle availability" onClick={onToggle} className={d.is_available ? "text-[#D97706]" : "text-[#16A34A]"}>
-            <span className={`size-3 rounded-full ${d.is_available ? "bg-[#D97706]" : "bg-[#16A34A]"}`} />
+          <IconBtn title="Hide" onClick={onToggle} className={d.is_available ? "text-[#F59E0B]" : "text-[#16A34A]"}>
+            <span className={`size-3 rounded-full ${d.is_available ? "bg-[#F59E0B]" : "bg-[#16A34A]"}`} />
           </IconBtn>
+          <IconBtn title="Hide Image" className="text-[#7C3AED]"><ImageOff className="size-4" /></IconBtn>
+          <IconBtn title="Duplicate" onClick={onDup} className="text-[#16A34A]"><Copy className="size-4" /></IconBtn>
+          <IconBtn title="Feature"><Star className="size-4" /></IconBtn>
           <IconBtn title="Delete" onClick={onDel} className="text-[#DC2626]"><Trash2 className="size-4" /></IconBtn>
         </div>
       </div>
@@ -216,8 +292,8 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
           </div>
         </div>
         <div className="flex gap-2 mt-6">
-          <button onClick={onClose} className="flex-1 h-10 rounded-md border border-input text-sm font-semibold">Cancel</button>
-          <button onClick={save} disabled={saving} className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">{saving ? "Saving..." : "Save Dish"}</button>
+          <button onClick={onClose} className="flex-1 h-11 rounded-md border border-gray-300 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+          <button onClick={save} disabled={saving} className="flex-1 h-11 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Saving..." : "Add Dish"}</button>
         </div>
       </div>
       <style>{`.input { width: 100%; height: 38px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--input); background: var(--background); font-size: 14px; } textarea.input { padding: 8px 12px; height: auto; }`}</style>

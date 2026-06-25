@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair } from "lucide-react";
+import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,8 @@ function TablesPage() {
   const [tables, setTables] = useState<TableRow[]>([]);
   const [totals, setTotals] = useState<Record<string, number>>({});
   const [activeFloor, setActiveFloor] = useState<string>("all");
+  const [section, setSection] = useState<"tables" | "delivery">("tables");
+  const [deliveryFilter, setDeliveryFilter] = useState<"all" | "delivery" | "takeaway">("all");
   const [, force] = useState(0);
 
   // ticking for elapsed time
@@ -122,45 +124,108 @@ function TablesPage() {
         }
       />
 
-      {/* Stats bar */}
-      <div className="rounded-xl border bg-card shadow-card px-5 py-4 mb-5 flex flex-wrap items-center gap-6 text-sm">
-        <Stat label="Total" value={counts.total} dot="bg-foreground/40" />
-        <Stat label="Available" value={counts.avail} dot="bg-table-available" />
-        <Stat label="Occupied" value={counts.occ} dot="bg-table-occupied" />
-        <Stat label="Bill Requested" value={counts.bill} dot="bg-table-bill" />
+      {/* Section tabs (toggle, underline) */}
+      <div className="flex items-center gap-1 border-b border-[#E2E8F0] mb-5">
+        <SectionTab active={section === "tables"} onClick={() => setSection("tables")}
+          label={<span className="inline-flex items-center gap-2">🪑 Table Management</span>} />
+        <SectionTab active={section === "delivery"} onClick={() => setSection("delivery")}
+          label={<span className="inline-flex items-center gap-2">🚗 Delivery / Takeaway</span>} />
       </div>
 
-      {/* Floor tabs */}
-      <div className="flex items-center gap-2 mb-5 flex-wrap">
-        <FloorTab active={activeFloor === "all"} onClick={() => setActiveFloor("all")} label="All Floors" count={tables.length} />
-        {floors.map((f) => (
-          <FloorTab
-            key={f}
-            active={activeFloor === f}
-            onClick={() => setActiveFloor(f)}
-            label={f}
-            count={tables.filter((t) => t.floor === f).length}
-          />
-        ))}
-        <button className="px-3 py-1.5 text-xs rounded-full border border-dashed text-muted-foreground hover:bg-accent">
-          + Floor
-        </button>
-      </div>
+      {section === "tables" ? (
+        <>
+          {/* Stats bar */}
+          <div className="rounded-xl border bg-card shadow-card px-5 py-4 mb-4 flex flex-wrap items-center gap-6 text-sm">
+            <Stat label="Total" value={counts.total} dot="bg-foreground/40" />
+            <Stat label="Available" value={counts.avail} dot="bg-table-available" />
+            <Stat label="Occupied" value={counts.occ} dot="bg-table-occupied" />
+            <Stat label="Bill Requested" value={counts.bill} dot="bg-table-bill" />
+          </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
-        {visible.map((t) => (
-          <TableCard
-            key={t.id}
-            table={t}
-            total={totals[t.id] ?? 0}
-            onTake={() => takeOrder(t)}
-            onAdd={() => navigate({ to: "/orders", search: { table: t.id } as never })}
-            onBill={() => navigate({ to: "/history", search: { table: t.id } as never })}
-          />
-        ))}
-      </div>
+          {/* Floor tabs */}
+          <div className="flex items-center gap-2 mb-5 flex-wrap">
+            <FloorTab active={activeFloor === "all"} onClick={() => setActiveFloor("all")} label="All Floors" count={tables.length} />
+            {floors.map((f) => (
+              <FloorTab
+                key={f}
+                active={activeFloor === f}
+                onClick={() => setActiveFloor(f)}
+                label={f}
+                count={tables.filter((t) => t.floor === f).length}
+              />
+            ))}
+            <button className="px-3 py-1.5 text-xs rounded-full border border-dashed text-muted-foreground hover:bg-accent">
+              + Floor
+            </button>
+          </div>
+
+          {/* Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
+            {visible.map((t) => (
+              <TableCard
+                key={t.id}
+                table={t}
+                total={totals[t.id] ?? 0}
+                onTake={() => takeOrder(t)}
+                onAdd={() => navigate({ to: "/orders", search: { table: t.id } as never })}
+                onBill={() => navigate({ to: "/history", search: { table: t.id } as never })}
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+        <DeliverySection filter={deliveryFilter} setFilter={setDeliveryFilter} />
+      )}
     </main>
+  );
+}
+
+function SectionTab({ active, onClick, label }: { active: boolean; onClick: () => void; label: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative h-11 px-4 text-sm font-semibold transition ${
+        active ? "text-[#0D9488]" : "text-[#64748B] hover:text-[#111827]"
+      }`}
+    >
+      {label}
+      {active && <span className="absolute left-0 right-0 -bottom-px h-[3px] bg-[#0D9488] rounded-t" />}
+    </button>
+  );
+}
+
+function DeliverySection({ filter, setFilter }: { filter: "all" | "delivery" | "takeaway"; setFilter: (v: "all" | "delivery" | "takeaway") => void }) {
+  return (
+    <div>
+      <div className="rounded-xl border bg-card shadow-card px-5 py-4 mb-4 flex flex-wrap items-center gap-6 text-sm">
+        <Stat label="Total" value={0} dot="bg-foreground/40" />
+        <Stat label="Preparing" value={0} dot="bg-[#F59E0B]" />
+        <Stat label="Ready" value={0} dot="bg-[#16A34A]" />
+      </div>
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
+        <DPill active={filter === "all"} onClick={() => setFilter("all")} label="All" count={0} />
+        <DPill active={filter === "delivery"} onClick={() => setFilter("delivery")} label={<span className="inline-flex items-center gap-1"><Truck className="size-3.5" /> Delivery</span>} count={0} />
+        <DPill active={filter === "takeaway"} onClick={() => setFilter("takeaway")} label={<span className="inline-flex items-center gap-1"><ShoppingBag className="size-3.5" /> Takeaway</span>} count={0} />
+      </div>
+      <div className="rounded-xl border border-dashed border-[#E2E8F0] bg-card py-16 text-center">
+        <Bell className="size-10 mx-auto text-muted-foreground mb-3" strokeWidth={1.5} />
+        <p className="text-sm font-medium text-foreground">No active delivery or takeaway orders</p>
+        <p className="text-xs text-muted-foreground mt-1">New orders will appear here when they come in.</p>
+      </div>
+    </div>
+  );
+}
+
+function DPill({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: React.ReactNode; count: number }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 text-xs rounded-full font-medium transition-colors ${
+        active ? "bg-[#0D9488] text-white" : "bg-card border border-border text-foreground hover:bg-accent"
+      }`}
+    >
+      {label} <span className="opacity-80 ml-1">{count}</span>
+    </button>
   );
 }
 
@@ -207,19 +272,26 @@ function TableCard({
   return (
     <div className={`relative rounded-xl border ${border} bg-card shadow-card p-3 flex flex-col`}>
       {/* header row */}
-      <div className="flex items-start justify-between mb-1">
+      <div className="flex items-start justify-between mb-1 gap-2">
         <span className="font-bold text-foreground">{table.number}</span>
-        {table.status === "occupied" ? (
-          <span className="text-[9px] font-semibold uppercase tracking-wide rounded-full px-1.5 py-0.5 bg-table-occupied/10 text-table-occupied">
-            Occupied
-          </span>
-        ) : table.status === "bill_requested" ? (
-          <span className="text-[9px] font-semibold uppercase tracking-wide rounded-full px-1.5 py-0.5 bg-table-bill/15 text-table-bill">
-            Bill Requested
-          </span>
-        ) : (
-          <span className={`size-2.5 rounded-full ${dot}`} />
-        )}
+        <div className="flex items-center gap-1 flex-wrap justify-end">
+          {table.status === "occupied" && table.occupied_since && (
+            <span className="text-[10px] font-bold rounded-full px-2 py-0.5 bg-[#F59E0B]/15 text-[#D97706]">
+              {elapsedMinutes(table.occupied_since)}
+            </span>
+          )}
+          {table.status === "occupied" ? (
+            <span className="text-[9px] font-semibold uppercase tracking-wide rounded-full px-1.5 py-0.5 bg-table-occupied/10 text-table-occupied">
+              Occupied
+            </span>
+          ) : table.status === "bill_requested" ? (
+            <span className="text-[9px] font-semibold uppercase tracking-wide rounded-full px-1.5 py-0.5 bg-table-bill/15 text-table-bill">
+              Bill Requested
+            </span>
+          ) : (
+            <span className={`size-2.5 rounded-full ${dot}`} />
+          )}
+        </div>
       </div>
 
       {/* center area */}
@@ -243,7 +315,7 @@ function TableCard({
       {table.status === "available" && (
         <button
           onClick={onTake}
-          className="w-full text-xs font-semibold py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
+          className="w-full text-xs font-semibold py-2 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white transition-colors"
         >
           Take Order
         </button>
