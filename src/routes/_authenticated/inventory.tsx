@@ -3,8 +3,9 @@ import { useState } from "react";
 import {
   Package, Sparkles, ClipboardList, Plus, Zap, Trash2, Download,
   Search, BookOpen, UtensilsCrossed, Clock, ShoppingCart, TrendingUp,
-  Recycle, ArrowUpDown,
+  Recycle, ArrowUpDown, X, CheckCircle2, RefreshCw, Upload,
 } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
   component: InventoryPage,
@@ -25,6 +26,7 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 
 function InventoryPage() {
   const [tab, setTab] = useState<Tab>("dashboard");
+  const [importOpen, setImportOpen] = useState(false);
   return (
     <main className="p-6 max-w-[1400px] mx-auto">
       {/* Header */}
@@ -39,7 +41,7 @@ function InventoryPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
+          <button onClick={() => setImportOpen(true)} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
             <Sparkles className="size-4" /> Smart Import
           </button>
           <button className="h-10 px-4 rounded-md border-2 border-[#0D9488] text-[#0D9488] hover:bg-[#0D9488]/5 text-sm font-semibold inline-flex items-center gap-2 bg-white">
@@ -69,10 +71,11 @@ function InventoryPage() {
       {tab === "dashboard" && <DashboardTab />}
       {tab === "stock" && <StockTab />}
       {tab === "recipes" && <RecipesTab />}
-      {tab === "usage" && <ComingSoon icon={<Clock className="size-10 text-[#0D9488]" />} title="Usage" subtitle="Track consumption trends across your kitchen." />}
-      {tab === "procurement" && <ComingSoon icon={<ShoppingCart className="size-10 text-[#0D9488]" />} title="Procurement" subtitle="Manage suppliers and purchase orders." />}
-      {tab === "ai" && <ComingSoon icon={<TrendingUp className="size-10 text-[#0D9488]" />} title="AI Insights" subtitle="Forecast demand and reduce waste with AI suggestions." />}
-      {tab === "waste" && <ComingSoon icon={<Recycle className="size-10 text-[#0D9488]" />} title="Waste" subtitle="Log and review waste events to cut losses." />}
+      {tab === "usage" && <UsageTab />}
+      {tab === "procurement" && <ProcurementTab />}
+      {tab === "ai" && <AIInsightsTab />}
+      {tab === "waste" && <WasteTab />}
+      {importOpen && <SmartImportModal onClose={() => setImportOpen(false)} />}
     </main>
   );
 }
@@ -149,6 +152,7 @@ function StockTab() {
 }
 
 function RecipesTab() {
+  const [addOpen, setAddOpen] = useState(false);
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -157,7 +161,7 @@ function RecipesTab() {
           <p className="text-xs text-[#64748B]">0 of 0 recipes</p>
         </div>
         <div className="flex gap-2">
-          <button className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
+          <button onClick={() => setAddOpen(true)} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
             <Plus className="size-4" /> Add Recipe
           </button>
           <button className="h-10 px-4 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-sm font-semibold inline-flex items-center gap-2">
@@ -168,15 +172,20 @@ function RecipesTab() {
           </button>
         </div>
       </div>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#64748B]" />
+        <input placeholder="Search recipes..." className="w-full h-10 pl-10 pr-3 rounded-md border border-[#E2E8F0] bg-white text-sm" />
+      </div>
 
       <div className="rounded-2xl border border-[#E2E8F0] bg-white p-12 text-center shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
         <UtensilsCrossed className="size-12 text-[#94A3B8] mx-auto mb-3" strokeWidth={1.5} />
         <h3 className="text-base font-semibold text-[#111827] mb-1">No recipes yet</h3>
         <p className="text-sm text-[#64748B] mb-5">Create your first recipe to track ingredient costs.</p>
-        <button className="h-11 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
+        <button onClick={() => setAddOpen(true)} className="h-11 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
           <Plus className="size-4" /> Add Recipe
         </button>
       </div>
+      {addOpen && <AddRecipeModal onClose={() => setAddOpen(false)} />}
     </div>
   );
 }
