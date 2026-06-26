@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag } from "lucide-react";
+import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,10 @@ function TablesPage() {
   const [section, setSection] = useState<"tables" | "delivery">("tables");
   const [deliveryFilter, setDeliveryFilter] = useState<"all" | "delivery" | "takeaway">("all");
   const [, force] = useState(0);
+  const [bookOpen, setBookOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   // ticking for elapsed time
   useEffect(() => {
@@ -99,14 +103,14 @@ function TablesPage() {
     navigate({ to: "/orders", search: { table: t.id } as never });
   };
 
-  const resetAll = async () => {
-    if (!confirm("Reset all tables to Available? This clears active table states.")) return;
+  const doResetAll = async () => {
     const { error } = await supabase
       .from("tables")
       .update({ status: "available", occupied_since: null })
       .neq("id", "00000000-0000-0000-0000-000000000000");
     if (error) toast.error(error.message);
     else toast.success("All tables reset");
+    setResetOpen(false);
   };
 
   return (
@@ -116,13 +120,18 @@ function TablesPage() {
         subtitle="Fudiyo Kitchen"
         actions={
           <>
-            <Button variant="outline" size="sm"><CalendarPlus /> Book</Button>
-            <Button variant="outline" size="sm" onClick={resetAll}><RotateCcw /> Reset All</Button>
-            <Button variant="outline" size="sm"><Plus /> Add</Button>
-            <Button variant="outline" size="sm"><QrCode /> QR Codes</Button>
+            <Button variant="outline" size="sm" onClick={() => setBookOpen(true)}><CalendarPlus /> Book</Button>
+            <Button variant="outline" size="sm" onClick={() => setResetOpen(true)}><RotateCcw /> Reset All</Button>
+            <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}><Plus /> Add</Button>
+            <Button variant="outline" size="sm" onClick={() => setQrOpen(true)}><QrCode /> QR Codes</Button>
           </>
         }
       />
+
+      {bookOpen && <BookWizard tables={tables} onClose={() => setBookOpen(false)} />}
+      {resetOpen && <ResetConfirm onCancel={() => setResetOpen(false)} onConfirm={doResetAll} />}
+      {addOpen && <AddTableModal floors={floors} onClose={() => setAddOpen(false)} />}
+      {qrOpen && <QrCodesModal tables={tables} onClose={() => setQrOpen(false)} />}
 
       {/* Section tabs (toggle, underline) */}
       <div className="flex items-center gap-1 border-b border-[#E2E8F0] mb-5">
