@@ -31,6 +31,7 @@ function MenuPage() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [hideImages, setHideImages] = useState(false);
   const [showQr, setShowQr] = useState(false);
+  const [showCustomize, setShowCustomize] = useState(false);
   const [editing, setEditing] = useState<Partial<Dish> | null>(null);
 
   const load = async () => {
@@ -94,7 +95,7 @@ function MenuPage() {
         <ToolBtn color="#DC2626" onClick={() => toast.info("Upload menu — coming soon")}><Upload className="size-4" /> Upload</ToolBtn>
         <ToolBtn color="#F59E0B" onClick={() => toast.info("Bulk photo upload — coming soon")}><Camera className="size-4" /> Photo</ToolBtn>
         <ToolBtn color="#0D9488" onClick={() => setShowQr(true)}><QrCode className="size-4" /> QR Code</ToolBtn>
-        <ToolBtn outline color="#0D9488" onClick={() => toast.info("Theme customizer — coming soon")}><Eye className="size-4" /> Customize</ToolBtn>
+        <ToolBtn outline color="#0D9488" onClick={() => setShowCustomize(true)}><Eye className="size-4" /> Customize</ToolBtn>
         <ToolBtn outline color="#16A34A" onClick={() => setHideImages((v) => !v)}>
           {hideImages ? <ImageIcon className="size-4" /> : <ImageOff className="size-4" />} {hideImages ? "Show Images" : "Hide Images"}
         </ToolBtn>
@@ -140,6 +141,7 @@ function MenuPage() {
 
       {editing && <DishDrawer initial={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
       {showQr && <QrModal onClose={() => setShowQr(false)} />}
+      {showCustomize && <CustomizeOverlay dishes={dishes} onClose={() => setShowCustomize(false)} />}
     </main>
   );
 }
@@ -272,11 +274,13 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <button className="flex-1 bg-black/40" onClick={onClose} aria-label="Close" />
-      <div className="w-[420px] max-w-full bg-card border-l border-border overflow-y-auto p-6">
-        <h2 className="text-lg font-semibold mb-4">{initial.id ? "Edit Dish" : "Add Dish"}</h2>
-        <div className="space-y-4">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-[#0D9488] text-white px-5 py-4 flex items-center justify-between">
+          <h2 className="text-base font-bold">{initial.id ? "Edit Dish" : "Add New Dish"}</h2>
+          <button onClick={onClose} className="size-8 inline-flex items-center justify-center rounded hover:bg-white/10"><X className="size-4" /></button>
+        </div>
+        <div className="p-6 space-y-4 overflow-y-auto">
           <Field label="Dish name *"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
           <Field label="Category *"><input className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Rice Items" /></Field>
           <Field label="Description"><textarea className="input min-h-[80px]" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
@@ -286,14 +290,14 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
             <input type="checkbox" checked={form.is_available} onChange={(e) => setForm({ ...form, is_available: e.target.checked })} />
             Available
           </label>
-          <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground flex items-start gap-2">
+          <div className="rounded-md bg-gray-50 p-3 text-xs text-gray-500 flex items-start gap-2">
             <Camera className="size-4 shrink-0 mt-0.5" />
             Photo upload to cloud storage ships next phase. For now paste an image URL.
           </div>
         </div>
-        <div className="flex gap-2 mt-6">
-          <button onClick={onClose} className="flex-1 h-11 rounded-md border border-gray-300 text-sm font-semibold hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="flex-1 h-11 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Saving..." : "Add Dish"}</button>
+        <div className="flex gap-2 px-6 py-4 border-t bg-gray-50">
+          <button onClick={onClose} className="flex-1 h-11 rounded-md border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">Cancel</button>
+          <button onClick={save} disabled={saving} className="flex-1 h-11 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Saving..." : "Add Dish"}</button>
         </div>
       </div>
       <style>{`.input { width: 100%; height: 38px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--input); background: var(--background); font-size: 14px; } textarea.input { padding: 8px 12px; height: auto; }`}</style>
