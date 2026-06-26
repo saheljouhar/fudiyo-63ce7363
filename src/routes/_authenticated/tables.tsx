@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag } from "lucide-react";
+import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,10 @@ function TablesPage() {
   const [section, setSection] = useState<"tables" | "delivery">("tables");
   const [deliveryFilter, setDeliveryFilter] = useState<"all" | "delivery" | "takeaway">("all");
   const [, force] = useState(0);
+  const [bookOpen, setBookOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   // ticking for elapsed time
   useEffect(() => {
@@ -99,14 +103,14 @@ function TablesPage() {
     navigate({ to: "/orders", search: { table: t.id } as never });
   };
 
-  const resetAll = async () => {
-    if (!confirm("Reset all tables to Available? This clears active table states.")) return;
+  const doResetAll = async () => {
     const { error } = await supabase
       .from("tables")
       .update({ status: "available", occupied_since: null })
       .neq("id", "00000000-0000-0000-0000-000000000000");
     if (error) toast.error(error.message);
     else toast.success("All tables reset");
+    setResetOpen(false);
   };
 
   return (
@@ -116,13 +120,18 @@ function TablesPage() {
         subtitle="Fudiyo Kitchen"
         actions={
           <>
-            <Button variant="outline" size="sm"><CalendarPlus /> Book</Button>
-            <Button variant="outline" size="sm" onClick={resetAll}><RotateCcw /> Reset All</Button>
-            <Button variant="outline" size="sm"><Plus /> Add</Button>
-            <Button variant="outline" size="sm"><QrCode /> QR Codes</Button>
+            <Button variant="outline" size="sm" onClick={() => setBookOpen(true)}><CalendarPlus /> Book</Button>
+            <Button variant="outline" size="sm" onClick={() => setResetOpen(true)}><RotateCcw /> Reset All</Button>
+            <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}><Plus /> Add</Button>
+            <Button variant="outline" size="sm" onClick={() => setQrOpen(true)}><QrCode /> QR Codes</Button>
           </>
         }
       />
+
+      {bookOpen && <BookWizard tables={tables} onClose={() => setBookOpen(false)} />}
+      {resetOpen && <ResetConfirm onCancel={() => setResetOpen(false)} onConfirm={doResetAll} />}
+      {addOpen && <AddTableModal floors={floors} onClose={() => setAddOpen(false)} />}
+      {qrOpen && <QrCodesModal tables={tables} onClose={() => setQrOpen(false)} />}
 
       {/* Section tabs (toggle, underline) */}
       <div className="flex items-center gap-1 border-b border-[#E2E8F0] mb-5">
@@ -342,5 +351,230 @@ function TableCard({
         </button>
       )}
     </div>
+  );
+}
+/* ============== Modals ============== */
+
+function ModalShell({ children, onClose, width = "max-w-lg" }: { children: React.ReactNode; onClose: () => void; width?: string }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className={`bg-white rounded-xl shadow-2xl w-full ${width} max-h-[90vh] overflow-y-auto`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ResetConfirm({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <ModalShell onClose={onCancel} width="max-w-md">
+      <div className="p-6">
+        <h2 className="text-lg font-bold text-[#111827] mb-1">Reset all tables?</h2>
+        <p className="text-sm text-[#64748B] mb-6">This will clear all occupied table states. This cannot be undone.</p>
+        <div className="flex gap-2 justify-end">
+          <button onClick={onCancel} className="h-10 px-4 rounded-md border border-gray-300 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+          <button onClick={onConfirm} className="h-10 px-4 rounded-md bg-[#DC2626] hover:bg-[#B91C1C] text-white text-sm font-semibold">Reset All</button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function BookWizard({ tables, onClose }: { tables: TableRow[]; onClose: () => void }) {
+  const [step, setStep] = useState(1);
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [slot, setSlot] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [party, setParty] = useState(2);
+  const [tableId, setTableId] = useState<string | null>(null);
+  const slots: string[] = [];
+  for (let h = 10; h < 24; h++) for (const m of [0, 30]) slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+
+  const confirm = async () => {
+    if (!tableId || !slot) return;
+    const { error } = await supabase.from("bookings").insert({
+      table_id: tableId, guest_name: name, phone, party_size: party,
+      booking_time: `${date}T${slot}:00`, status: "confirmed",
+    } as never);
+    if (error) toast.error(error.message); else { toast.success("Booking confirmed"); onClose(); }
+  };
+
+  const StepDot = ({ n, label }: { n: number; label: string }) => (
+    <div className="flex items-center gap-2">
+      <div className={`size-7 rounded-full inline-flex items-center justify-center text-xs font-bold ${step >= n ? "bg-[#0D9488] text-white" : "bg-gray-200 text-gray-500"}`}>{n}</div>
+      <span className={`text-xs font-semibold ${step >= n ? "text-[#0D9488]" : "text-gray-500"}`}>{label}</span>
+    </div>
+  );
+
+  return (
+    <ModalShell onClose={onClose} width="max-w-2xl">
+      <div className="px-6 py-4 border-b flex items-center justify-between">
+        <h2 className="text-base font-bold">New Booking</h2>
+        <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
+      </div>
+      <div className="px-6 py-4 flex items-center gap-4 border-b">
+        <StepDot n={1} label="When" /><span className="text-gray-300">›</span>
+        <StepDot n={2} label="Who" /><span className="text-gray-300">›</span>
+        <StepDot n={3} label="Where" />
+      </div>
+      <div className="p-6">
+        {step === 1 && (
+          <>
+            <label className="text-xs font-bold text-[#64748B] uppercase">Date</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="block w-full h-10 px-3 rounded-md border mt-1 mb-4 text-sm" />
+            <label className="text-xs font-bold text-[#64748B] uppercase">Time Slot</label>
+            <div className="grid grid-cols-5 gap-2 mt-2">
+              {slots.map((s) => (
+                <button key={s} onClick={() => setSlot(s)} className={`h-10 text-sm font-semibold rounded-md border ${slot === s ? "bg-[#0D9488] border-[#0D9488] text-white" : "bg-white border-gray-200 hover:border-[#0D9488]"}`}>{s}</button>
+              ))}
+            </div>
+          </>
+        )}
+        {step === 2 && (
+          <div className="space-y-3">
+            <div><label className="text-xs font-bold text-[#64748B] uppercase">Guest Name</label><input value={name} onChange={(e) => setName(e.target.value)} className="block w-full h-10 px-3 rounded-md border mt-1 text-sm" /></div>
+            <div><label className="text-xs font-bold text-[#64748B] uppercase">Phone</label><input value={phone} onChange={(e) => setPhone(e.target.value)} className="block w-full h-10 px-3 rounded-md border mt-1 text-sm" /></div>
+            <div><label className="text-xs font-bold text-[#64748B] uppercase">Party Size</label><input type="number" min={1} value={party} onChange={(e) => setParty(Number(e.target.value))} className="block w-full h-10 px-3 rounded-md border mt-1 text-sm" /></div>
+          </div>
+        )}
+        {step === 3 && (
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            {tables.filter((t) => t.status === "available" && t.seats >= party).map((t) => (
+              <button key={t.id} onClick={() => setTableId(t.id)} className={`p-3 rounded-lg border text-center ${tableId === t.id ? "border-[#0D9488] bg-[#0D9488]/5" : "border-gray-200"}`}>
+                <div className="font-bold">{t.number}</div>
+                <div className="text-[11px] text-gray-500">{t.floor} · {t.seats} seats</div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="px-6 py-4 border-t flex justify-between bg-gray-50">
+        <button onClick={() => step === 1 ? onClose() : setStep(step - 1)} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">{step === 1 ? "Cancel" : "‹ Back"}</button>
+        {step < 3 ? (
+          <button disabled={(step === 1 && !slot) || (step === 2 && !name)} onClick={() => setStep(step + 1)} className="h-10 px-5 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold disabled:opacity-50">Next ›</button>
+        ) : (
+          <button disabled={!tableId} onClick={confirm} className="h-10 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">Confirm Booking ✓</button>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+function AddTableModal({ floors, onClose }: { floors: string[]; onClose: () => void }) {
+  const [tab, setTab] = useState<"single" | "bulk">("single");
+  const [floor, setFloor] = useState(floors[0] ?? "Ground");
+  const [name, setName] = useState("");
+  const [cap, setCap] = useState(4);
+  const [from, setFrom] = useState(1);
+  const [to, setTo] = useState(5);
+  const [seats, setSeats] = useState(4);
+
+  const restaurantId = async () => {
+    const { data } = await supabase.from("restaurants").select("id").limit(1).maybeSingle();
+    return data?.id;
+  };
+
+  const addOne = async () => {
+    const rid = await restaurantId();
+    if (!rid) return toast.error("No restaurant configured");
+    const { error } = await supabase.from("tables").insert({ number: name, floor, seats: cap, status: "available", restaurant_id: rid } as never);
+    if (error) toast.error(error.message); else { toast.success("Table added"); onClose(); }
+  };
+  const addBulk = async () => {
+    const rid = await restaurantId();
+    if (!rid) return toast.error("No restaurant configured");
+    const rows = [];
+    for (let i = from; i <= to; i++) rows.push({ number: String(i), floor, seats, status: "available", restaurant_id: rid });
+    const { error } = await supabase.from("tables").insert(rows as never);
+    if (error) toast.error(error.message); else { toast.success(`Created ${rows.length} tables`); onClose(); }
+  };
+
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="px-6 py-4 border-b flex items-center justify-between">
+        <h2 className="text-base font-bold">Add Tables</h2>
+        <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
+      </div>
+      <div className="flex border-b">
+        {(["single", "bulk"] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)} className={`flex-1 h-11 text-sm font-semibold ${tab === t ? "border-b-2 border-[#0D9488] text-[#0D9488]" : "text-gray-500"}`}>
+            {t === "single" ? "Single Table" : "Bulk Add"}
+          </button>
+        ))}
+      </div>
+      <div className="p-6 space-y-3">
+        <div><label className="text-xs font-bold uppercase text-gray-500">Floor</label>
+          <input value={floor} onChange={(e) => setFloor(e.target.value)} className="block w-full h-10 px-3 rounded-md border mt-1 text-sm" />
+        </div>
+        {tab === "single" ? (
+          <>
+            <div><label className="text-xs font-bold uppercase text-gray-500">Table Name</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. T1, VIP 1" className="block w-full h-10 px-3 rounded-md border mt-1 text-sm" /></div>
+            <div><label className="text-xs font-bold uppercase text-gray-500">Capacity</label>
+              <input type="number" value={cap} onChange={(e) => setCap(Number(e.target.value))} className="block w-full h-10 px-3 rounded-md border mt-1 text-sm" /></div>
+          </>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            <div><label className="text-xs font-bold uppercase text-gray-500">From #</label><input type="number" value={from} onChange={(e) => setFrom(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border mt-1 text-sm" /></div>
+            <div><label className="text-xs font-bold uppercase text-gray-500">To #</label><input type="number" value={to} onChange={(e) => setTo(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border mt-1 text-sm" /></div>
+            <div><label className="text-xs font-bold uppercase text-gray-500">Seats</label><input type="number" value={seats} onChange={(e) => setSeats(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border mt-1 text-sm" /></div>
+          </div>
+        )}
+      </div>
+      <div className="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50">
+        <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
+        {tab === "single" ? (
+          <button disabled={!name.trim()} onClick={addOne} className="h-10 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">Add Table</button>
+        ) : (
+          <button onClick={addBulk} className="h-10 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold">Create Tables</button>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+function QrCodesModal({ tables, onClose }: { tables: TableRow[]; onClose: () => void }) {
+  const [custom, setCustom] = useState("");
+  const [copied, setCopied] = useState<string | null>(null);
+  const urlFor = (t: TableRow) => `${typeof window !== "undefined" ? window.location.origin : ""}/menu?t=${encodeURIComponent(t.number)}`;
+  const qrFor = (url: string) => `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+
+  return (
+    <ModalShell onClose={onClose} width="max-w-5xl">
+      <div className="px-6 py-4 border-b flex items-center justify-between sticky top-0 bg-white z-10">
+        <h2 className="text-base font-bold">Table QR Codes</h2>
+        <div className="flex items-center gap-2">
+          <button className="h-9 px-3 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-1.5">
+            <Download className="size-4" /> Download All ({tables.length})
+          </button>
+          <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
+        </div>
+      </div>
+      <div className="px-6 py-4 border-b bg-gray-50 flex items-center gap-2">
+        <span className="text-xs font-bold uppercase text-gray-500">Generate Custom QR:</span>
+        <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="https://..." className="flex-1 h-9 px-3 rounded-md border text-sm" />
+        <button disabled={!custom} onClick={() => window.open(qrFor(custom), "_blank")} className="h-9 px-3 rounded-md bg-[#0D9488] text-white text-sm font-semibold disabled:opacity-50">Generate</button>
+      </div>
+      <div className="p-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        {tables.map((t) => {
+          const url = urlFor(t);
+          return (
+            <div key={t.id} className="rounded-xl border bg-white p-4 text-center">
+              <img src={qrFor(url)} alt={t.number} className="mx-auto rounded border" />
+              <div className="mt-2 font-bold">{t.number}</div>
+              <div className="text-[11px] text-gray-500 mb-2">{t.floor}</div>
+              <div className="flex gap-1.5">
+                <a href={qrFor(url)} download={`table-${t.number}.png`} className="flex-1 h-8 rounded border text-xs font-semibold inline-flex items-center justify-center gap-1 hover:bg-gray-50"><Download className="size-3" /> Download</a>
+                <button onClick={() => { navigator.clipboard.writeText(url); setCopied(t.id); setTimeout(() => setCopied(null), 1500); }}
+                  className="flex-1 h-8 rounded border text-xs font-semibold inline-flex items-center justify-center gap-1 hover:bg-gray-50">
+                  {copied === t.id ? <><Check className="size-3 text-[#16A34A]" /> Copied</> : <><Copy className="size-3" /> Copy URL</>}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </ModalShell>
   );
 }

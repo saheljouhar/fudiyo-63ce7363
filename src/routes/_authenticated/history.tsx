@@ -1,11 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/format";
 import {
   Receipt, ChevronDown, ChevronUp, Printer, Eye, Pencil, RotateCcw, Pause,
   Calendar, ClipboardList, LayoutGrid, List, BarChart3, Search, Copy, Check,
-  FileSpreadsheet, ArrowUpDown, Plus,
+  FileSpreadsheet, ArrowUpDown, Plus, X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -550,13 +550,174 @@ function SummaryTab({ orders }: { orders: OrderRow[] }) {
 /* ---------------- Bookings Embed ---------------- */
 
 function BookingsEmbed() {
+  const [creating, setCreating] = useState(false);
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [q, setQ] = useState("");
+
+  if (creating) return <NewBookingForm onClose={() => setCreating(false)} />;
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-white p-6 text-center">
-      <Calendar className="size-12 mx-auto text-[#CBD5E1] mb-3" strokeWidth={1.5} />
-      <p className="text-[14px] text-[#6B7280] mb-3">Bookings management has moved to its own page.</p>
-      <Link to="/bookings" className="inline-flex items-center gap-1 h-10 px-4 rounded-lg bg-[#0D9488] text-white text-[13px] font-semibold">
-        <Plus className="size-4" /> Open Bookings
-      </Link>
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button onClick={() => setCreating(true)} className="h-10 px-4 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold inline-flex items-center gap-1.5">
+          <Plus className="size-4" /> New Booking
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 bg-white border border-[#E5E7EB] rounded-xl p-3">
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="h-10 px-3 rounded-lg border text-sm">
+          <option value="all">All Types</option>
+          <option value="catering">Catering</option>
+          <option value="advance">Advance Order</option>
+          <option value="venue">Venue / Place</option>
+        </select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-10 px-3 rounded-lg border text-sm">
+          <option value="all">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="completed">Completed</option>
+        </select>
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 px-3 rounded-lg border text-sm" />
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 px-3 rounded-lg border text-sm" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search... Enter to apply" className="flex-1 min-w-[200px] h-10 px-3 rounded-lg border text-sm" />
+      </div>
+      <div className="rounded-xl bg-[#FEE2E2]/40 border border-[#FECACA] p-10 text-center">
+        <Search className="size-10 mx-auto text-[#F87171] mb-3" strokeWidth={1.5} />
+        <h3 className="text-base font-bold text-[#111827]">No bookings found</h3>
+        <p className="text-sm text-[#6B7280] mt-1">Try adjusting your filters or create a new booking.</p>
+      </div>
     </div>
   );
+}
+
+function NewBookingForm({ onClose }: { onClose: () => void }) {
+  const [bookingType, setBookingType] = useState<"catering" | "advance" | "venue">("catering");
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [eventName, setEventName] = useState("");
+  const [guests, setGuests] = useState(0);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [notes, setNotes] = useState("");
+  const [discount, setDiscount] = useState(0);
+  const [tax, setTax] = useState(0);
+  const [service, setService] = useState(0);
+  const [advance, setAdvance] = useState(false);
+  const [trackExp, setTrackExp] = useState(false);
+
+  const subtotal = 0;
+  const total = Math.max(0, subtotal - discount + tax + service);
+
+  const save = async () => {
+    const { error } = await supabase.from("bookings").insert({
+      booking_type: bookingType, guest_name: name, phone, email,
+      event_name: eventName, party_size: guests, special_instructions: notes,
+      booking_time: startDate ? `${startDate}T${startTime || "00:00"}:00` : null,
+      total, status: "pending",
+    } as never);
+    if (error) toast.error(error.message);
+    else { toast.success("Booking saved"); onClose(); }
+  };
+
+  const types = [
+    { id: "catering" as const, icon: "🍽", title: "Catering", desc: "Custom menus for events" },
+    { id: "advance" as const, icon: "📋", title: "Advance Order", desc: "Pre-order for pickup/delivery" },
+    { id: "venue" as const, icon: "🏛", title: "Venue / Place", desc: "Reserve halls, rooms & event spaces" },
+  ];
+
+  return (
+    <div className="relative bg-white rounded-xl border border-[#E5E7EB] p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-lg font-bold">New Booking</h2>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-[#F59E0B] text-white capitalize">{bookingType}</span>
+          <button onClick={onClose} className="size-8 inline-flex items-center justify-center rounded hover:bg-gray-100"><X className="size-4" /></button>
+        </div>
+      </div>
+
+      <Section n="①" title="Booking Type">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {types.map((t) => (
+            <button key={t.id} onClick={() => setBookingType(t.id)}
+              className={`p-4 rounded-xl border-2 text-left relative ${bookingType === t.id ? "border-[#F59E0B] bg-[#FFFBEB]" : "border-gray-200 hover:border-gray-300"}`}>
+              {bookingType === t.id && <Check className="absolute top-2 right-2 size-5 text-[#F59E0B]" />}
+              <div className="text-3xl mb-2">{t.icon}</div>
+              <div className="font-semibold">{t.title}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{t.desc}</div>
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      <Section n="②" title="Menu Items" subtitle="Search or add custom dishes for the event">
+        <div className="flex gap-2 mb-3">
+          <input placeholder="Search menu..." className="flex-1 h-10 px-3 rounded-md border text-sm" />
+          <button className="h-10 px-3 rounded-md border bg-white text-sm font-semibold inline-flex items-center gap-1"><Plus className="size-4" /> Custom</button>
+        </div>
+        <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">No items added yet.</div>
+      </Section>
+
+      <Section n="③" title="Customer & Event Details">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          <FormField label="PHONE"><input value={phone} onChange={(e) => setPhone(e.target.value)} className="input2" /></FormField>
+          <FormField label="NAME"><input value={name} onChange={(e) => setName(e.target.value)} className="input2" /></FormField>
+          <FormField label="EMAIL"><input value={email} onChange={(e) => setEmail(e.target.value)} className="input2" /></FormField>
+        </div>
+        <button className="text-sm text-[#0D9488] font-semibold mb-4">+ Add address</button>
+        <h4 className="text-xs font-bold uppercase text-gray-500 mt-2 mb-2">Event Details</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <FormField label="EVENT NAME"><input value={eventName} onChange={(e) => setEventName(e.target.value)} className="input2" /></FormField>
+          <FormField label="GUEST COUNT"><input type="number" value={guests} onChange={(e) => setGuests(Number(e.target.value))} className="input2" /></FormField>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <FormField label="START DATE"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="input2" /></FormField>
+          <FormField label="END DATE (OPTIONAL)"><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="input2" /></FormField>
+          <FormField label="START TIME"><input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="input2" /></FormField>
+          <FormField label="END TIME"><input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="input2" /></FormField>
+        </div>
+        <FormField label="SPECIAL INSTRUCTIONS"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="input2 min-h-[80px]" /></FormField>
+      </Section>
+
+      <Section n="④" title="Pricing & Payment">
+        <div className="space-y-2 max-w-md">
+          <div className="flex justify-between text-sm"><span className="text-gray-500">Subtotal</span><span className="font-semibold tabular-nums">{formatINR(subtotal)}</span></div>
+          <div className="flex justify-between items-center text-sm"><span className="text-gray-500">Discount</span><input type="number" value={discount} onChange={(e) => setDiscount(Number(e.target.value))} className="w-24 h-9 px-2 rounded border text-right text-sm" /></div>
+          <div className="flex justify-between items-center text-sm"><span className="text-gray-500">Tax</span><input type="number" value={tax} onChange={(e) => setTax(Number(e.target.value))} className="w-24 h-9 px-2 rounded border text-right text-sm" /></div>
+          <div className="flex justify-between items-center text-sm"><span className="text-gray-500">Service</span><input type="number" value={service} onChange={(e) => setService(Number(e.target.value))} className="w-24 h-9 px-2 rounded border text-right text-sm" /></div>
+        </div>
+        <div className="mt-4 h-14 rounded-lg bg-[#F59E0B] text-white flex items-center justify-between px-5">
+          <span className="font-bold">Total</span>
+          <span className="text-xl font-bold tabular-nums">{formatINR(total)}</span>
+        </div>
+        <div className="flex gap-6 mt-3">
+          <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={advance} onChange={(e) => setAdvance(e.target.checked)} /> Advance Payment</label>
+          <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={trackExp} onChange={(e) => setTrackExp(e.target.checked)} /> Track in Expenses</label>
+        </div>
+      </Section>
+
+      <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-3 bg-white border-t flex justify-end">
+        <button onClick={save} className="h-11 px-6 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-bold inline-flex items-center gap-1.5">
+          <Check className="size-4" /> Save Booking
+        </button>
+      </div>
+      <style>{`.input2 { width:100%; height:38px; padding:0 10px; border-radius:6px; border:1px solid #E5E7EB; font-size:13px; background:white; } textarea.input2 { padding:8px 10px; height:auto; }`}</style>
+    </div>
+  );
+}
+
+function Section({ n, title, subtitle, children }: { n: string; title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-6 pb-6 border-b border-gray-100 last:border-0">
+      <h3 className="text-base font-bold mb-1"><span className="text-[#F59E0B] mr-2">{n}</span>{title}</h3>
+      {subtitle && <p className="text-xs text-gray-500 mb-3">{subtitle}</p>}
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><div className="text-[10px] font-bold tracking-wider text-gray-500 mb-1">{label}</div>{children}</div>;
 }

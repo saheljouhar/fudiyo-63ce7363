@@ -31,6 +31,7 @@ function MenuPage() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [hideImages, setHideImages] = useState(false);
   const [showQr, setShowQr] = useState(false);
+  const [showCustomize, setShowCustomize] = useState(false);
   const [editing, setEditing] = useState<Partial<Dish> | null>(null);
 
   const load = async () => {
@@ -94,7 +95,7 @@ function MenuPage() {
         <ToolBtn color="#DC2626" onClick={() => toast.info("Upload menu — coming soon")}><Upload className="size-4" /> Upload</ToolBtn>
         <ToolBtn color="#F59E0B" onClick={() => toast.info("Bulk photo upload — coming soon")}><Camera className="size-4" /> Photo</ToolBtn>
         <ToolBtn color="#0D9488" onClick={() => setShowQr(true)}><QrCode className="size-4" /> QR Code</ToolBtn>
-        <ToolBtn outline color="#0D9488" onClick={() => toast.info("Theme customizer — coming soon")}><Eye className="size-4" /> Customize</ToolBtn>
+        <ToolBtn outline color="#0D9488" onClick={() => setShowCustomize(true)}><Eye className="size-4" /> Customize</ToolBtn>
         <ToolBtn outline color="#16A34A" onClick={() => setHideImages((v) => !v)}>
           {hideImages ? <ImageIcon className="size-4" /> : <ImageOff className="size-4" />} {hideImages ? "Show Images" : "Hide Images"}
         </ToolBtn>
@@ -140,6 +141,7 @@ function MenuPage() {
 
       {editing && <DishDrawer initial={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
       {showQr && <QrModal onClose={() => setShowQr(false)} />}
+      {showCustomize && <CustomizeOverlay dishes={dishes} onClose={() => setShowCustomize(false)} />}
     </main>
   );
 }
@@ -272,11 +274,13 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <button className="flex-1 bg-black/40" onClick={onClose} aria-label="Close" />
-      <div className="w-[420px] max-w-full bg-card border-l border-border overflow-y-auto p-6">
-        <h2 className="text-lg font-semibold mb-4">{initial.id ? "Edit Dish" : "Add Dish"}</h2>
-        <div className="space-y-4">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-[#0D9488] text-white px-5 py-4 flex items-center justify-between">
+          <h2 className="text-base font-bold">{initial.id ? "Edit Dish" : "Add New Dish"}</h2>
+          <button onClick={onClose} className="size-8 inline-flex items-center justify-center rounded hover:bg-white/10"><X className="size-4" /></button>
+        </div>
+        <div className="p-6 space-y-4 overflow-y-auto">
           <Field label="Dish name *"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
           <Field label="Category *"><input className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Rice Items" /></Field>
           <Field label="Description"><textarea className="input min-h-[80px]" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
@@ -286,14 +290,14 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
             <input type="checkbox" checked={form.is_available} onChange={(e) => setForm({ ...form, is_available: e.target.checked })} />
             Available
           </label>
-          <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground flex items-start gap-2">
+          <div className="rounded-md bg-gray-50 p-3 text-xs text-gray-500 flex items-start gap-2">
             <Camera className="size-4 shrink-0 mt-0.5" />
             Photo upload to cloud storage ships next phase. For now paste an image URL.
           </div>
         </div>
-        <div className="flex gap-2 mt-6">
-          <button onClick={onClose} className="flex-1 h-11 rounded-md border border-gray-300 text-sm font-semibold hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="flex-1 h-11 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Saving..." : "Add Dish"}</button>
+        <div className="flex gap-2 px-6 py-4 border-t bg-gray-50">
+          <button onClick={onClose} className="flex-1 h-11 rounded-md border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">Cancel</button>
+          <button onClick={save} disabled={saving} className="flex-1 h-11 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Saving..." : "Add Dish"}</button>
         </div>
       </div>
       <style>{`.input { width: 100%; height: 38px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--input); background: var(--background); font-size: 14px; } textarea.input { padding: 8px 12px; height: auto; }`}</style>
@@ -303,4 +307,59 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><div className="text-xs font-semibold text-muted-foreground mb-1">{label}</div>{children}</div>;
+}
+function CustomizeOverlay({ dishes, onClose }: { dishes: Dish[]; onClose: () => void }) {
+  const themes = [
+    { id: "default", name: "Default", desc: "Classic menu layout" },
+    { id: "classic", name: "Classic", desc: "Modern list view with header" },
+    { id: "bistro", name: "Bistro", desc: "Elegant book-style menu" },
+    { id: "cube", name: "Cube", desc: "3D interactive cube menu" },
+    { id: "book", name: "Book", desc: "3D book flip menu" },
+  ];
+  const [selected, setSelected] = useState<string>(() => localStorage.getItem("menu-theme") ?? "default");
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white flex flex-col">
+      <div className="h-14 px-6 border-b flex items-center justify-between">
+        <h2 className="text-lg font-bold">Customize Public Menu</h2>
+        <button onClick={onClose} className="size-9 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-5" /></button>
+      </div>
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[360px_1fr] overflow-hidden">
+        <div className="border-r p-5 flex flex-col">
+          <h3 className="text-xs font-bold uppercase text-gray-500 mb-3">Select Theme</h3>
+          <div className="space-y-2 flex-1 overflow-y-auto">
+            {themes.map((t) => (
+              <button key={t.id} onClick={() => setSelected(t.id)}
+                className={`w-full text-left p-4 rounded-lg border-2 ${selected === t.id ? "border-[#0D9488] bg-[#0D9488]/5" : "border-gray-200 hover:border-gray-300"}`}>
+                <div className="font-semibold text-sm">{t.name}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{t.desc}</div>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => { localStorage.setItem("menu-theme", selected); toast.success("Theme saved"); onClose(); }}
+            className="mt-4 h-11 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold">Save Theme</button>
+        </div>
+        <div className="bg-gray-100 flex items-center justify-center p-6 overflow-auto">
+          <div className="w-[340px] h-[640px] bg-white rounded-[40px] border-[12px] border-gray-900 shadow-2xl overflow-hidden">
+            <div className="h-full overflow-y-auto p-4">
+              <div className="text-center mb-4 pt-2">
+                <h4 className="text-base font-bold">Our Menu</h4>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">{themes.find((t) => t.id === selected)?.name} Theme</p>
+              </div>
+              {dishes.slice(0, 8).map((d) => (
+                <div key={d.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{d.name}</div>
+                    <div className="text-[11px] text-gray-500 truncate">{d.category}</div>
+                  </div>
+                  <div className="text-sm font-bold text-[#0D9488] tabular-nums">{formatINR(d.price)}</div>
+                </div>
+              ))}
+              {dishes.length === 0 && <p className="text-center text-xs text-gray-400 mt-10">Add dishes to see them here</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

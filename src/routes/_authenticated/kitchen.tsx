@@ -38,16 +38,21 @@ function KitchenPage() {
   const [flash, setFlash] = useState(false);
   const [splash, setSplash] = useState<Record<string, string>>({});
   const [detail, setDetail] = useState<Order | null>(null);
+  const [dateFilter, setDateFilter] = useState<"today" | "24h" | "all">("today");
+  const [dateOpen, setDateOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const seenRef = useRef<Set<string>>(new Set());
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   const load = async () => {
+    setRefreshing(true);
     const [{ data: o }, { data: t }] = await Promise.all([
       supabase.from("orders").select("id,table_id,status,items,created_at,order_type,note,round").order("created_at", { ascending: false }),
       supabase.from("tables").select("id,number"),
     ]);
     if (o) setOrders(o as unknown as Order[]);
     if (t) setTables(Object.fromEntries(t.map((x) => [x.id, x.number])));
+    setTimeout(() => setRefreshing(false), 400);
   };
 
   const beep = () => {
@@ -110,6 +115,15 @@ function KitchenPage() {
     ? orders.filter((o) => o.status === "pending" || o.status === "cooking" || o.status === "ready")
     : orders.filter((o) => o.status === TAB_TO_STATUS[tab]);
 
+  // Apply date filter
+  const dateFiltered = useMemo(() => {
+    if (dateFilter === "all") return visible;
+    const cutoff = dateFilter === "24h" ? Date.now() - 86400000 : new Date().setHours(0, 0, 0, 0);
+    return visible.filter((o) => new Date(o.created_at).getTime() >= cutoff);
+  }, [visible, dateFilter]);
+
+  const dateLabel = dateFilter === "today" ? "Today" : dateFilter === "24h" ? "Last 24h" : "All Time";
+
   const advance = async (o: Order) => {
     const next: Status = o.status === "pending" ? "cooking" : o.status === "cooking" ? "ready" : "billed";
     const label = next === "cooking" ? "Moved to Cooking" : next === "ready" ? "Moved to Ready" : "Order Complete";
@@ -131,7 +145,7 @@ function KitchenPage() {
   ];
 
   return (
-    <div className="min-h-screen -mx-6 -mt-4 px-6 pt-5 pb-8 bg-[#0F172A] text-white">
+    <div className="min-h-screen -mx-6 -mt-4 px-6 pt-5 pb-8 bg-[#111827] text-white">
       {flash && <div className="fixed inset-0 z-50 bg-amber-400/30 pointer-events-none animate-pulse" />}
       <header className="flex items-center justify-between pb-4">
         <div className="flex items-center gap-3">
@@ -148,15 +162,27 @@ function KitchenPage() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2 items-center">
-          <button className="h-10 px-3 rounded-md border border-white/20 inline-flex items-center gap-1.5 text-sm hover:bg-white/10">
-            <Calendar className="size-4" /> Today <ChevronDown className="size-3.5" />
-          </button>
+        <div className="flex gap-2 items-center relative">
+          <div className="relative">
+            <button onClick={() => setDateOpen((v) => !v)} className="h-10 px-3 rounded-md border border-white/20 inline-flex items-center gap-1.5 text-sm hover:bg-white/10">
+              <Calendar className="size-4" /> {dateLabel} <ChevronDown className="size-3.5" />
+            </button>
+            {dateOpen && (
+              <div className="absolute right-0 top-11 z-40 w-44 rounded-md border border-white/10 bg-[#1E293B] shadow-xl py-1">
+                {([["today", "Today"], ["24h", "Last 24 Hours"], ["all", "All Time"]] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => { setDateFilter(k); setDateOpen(false); }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-white/10 ${dateFilter === k ? "text-[#0D9488] font-semibold" : "text-white"}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={() => setMuted((m) => !m)} title={muted ? "Unmute" : "Mute"} className="size-10 rounded-md border border-white/20 inline-flex items-center justify-center hover:bg-white/10">
             {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
           </button>
-          <button onClick={load} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] inline-flex items-center gap-2 text-sm font-semibold text-white">
-            <RefreshCw className="size-4" /> Refresh
+          <button onClick={() => void load()} disabled={refreshing} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] inline-flex items-center gap-2 text-sm font-semibold text-white disabled:opacity-70">
+            <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
           </button>
         </div>
       </header>
@@ -182,7 +208,7 @@ function KitchenPage() {
         })}
       </div>
 
-      {visible.length === 0 ? (
+      {dateFiltered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-32 text-center">
           <ChefHat className="size-20 mb-5 text-gray-600" strokeWidth={1.5} />
           <p className="text-xl font-semibold text-gray-300">No active orders</p>
@@ -190,7 +216,7 @@ function KitchenPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-          {visible.map((o, i) => (
+          {dateFiltered.map((o, i) => (
             <KdsCard
               key={o.id}
               o={o}
