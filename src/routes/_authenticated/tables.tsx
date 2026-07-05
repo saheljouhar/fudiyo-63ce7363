@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check } from "lucide-react";
+import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Pencil, ArrowUp, ArrowDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,9 @@ function TablesPage() {
   const [resetOpen, setResetOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [datePopOpen, setDatePopOpen] = useState(false);
+  const [editingFloor, setEditingFloor] = useState<string | null>(null);
 
   // ticking for elapsed time
   useEffect(() => {
@@ -132,6 +135,27 @@ function TablesPage() {
       {resetOpen && <ResetConfirm onCancel={() => setResetOpen(false)} onConfirm={doResetAll} />}
       {addOpen && <AddTableModal floors={floors} onClose={() => setAddOpen(false)} />}
       {qrOpen && <QrCodesModal tables={tables} onClose={() => setQrOpen(false)} />}
+      {editingFloor && <EditFloorModal floor={editingFloor} floors={floors} onClose={() => setEditingFloor(null)} />}
+
+      {/* Date navigation */}
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={() => setSelectedDate((d) => new Date(d.getTime() - 86400000))}
+          className="size-9 rounded-md border border-[#E2E8F0] bg-white inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F9FAFB]">
+          <ChevronLeft className="size-4" />
+        </button>
+        <div className="relative">
+          <button onClick={() => setDatePopOpen((v) => !v)}
+            className={`h-9 px-4 inline-flex items-center gap-2 rounded-full text-[13px] font-semibold ${isToday(selectedDate) ? "bg-[#0D9488] text-white" : "bg-white border border-[#E2E8F0] text-[#374151]"}`}>
+            <CalendarIcon className="size-4" />
+            {isToday(selectedDate) ? "Today" : selectedDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+          </button>
+          {datePopOpen && <DatePopover value={selectedDate} onChange={(d) => { setSelectedDate(d); setDatePopOpen(false); }} onClose={() => setDatePopOpen(false)} />}
+        </div>
+        <button onClick={() => setSelectedDate((d) => new Date(d.getTime() + 86400000))}
+          className="size-9 rounded-md border border-[#E2E8F0] bg-white inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F9FAFB]">
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
 
       {/* Section tabs (toggle, underline) */}
       <div className="flex items-center gap-1 border-b border-[#E2E8F0] mb-5">
@@ -152,6 +176,17 @@ function TablesPage() {
           </div>
 
           {/* Floor tabs */}
+          {activeFloor !== "all" && (
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[14px] font-semibold text-[#111827]">
+                {activeFloor} · <span className="text-[#64748B] font-normal">{tables.filter((t) => t.floor === activeFloor).length} tables</span>
+              </div>
+              <button onClick={() => setEditingFloor(activeFloor)}
+                className="size-8 rounded-md hover:bg-[#F1F5F9] inline-flex items-center justify-center text-[#6B7280]" title="Edit floor">
+                <Pencil className="size-4" />
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-2 mb-5 flex-wrap">
             <FloorTab active={activeFloor === "all"} onClick={() => setActiveFloor("all")} label="All Floors" count={tables.length} />
             {floors.map((f) => (
