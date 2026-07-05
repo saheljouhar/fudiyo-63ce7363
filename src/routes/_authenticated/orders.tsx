@@ -971,3 +971,62 @@ Thank you for dining with us!`}
     </div>
   );
 }
+
+function PrinterSetupModal({ onClose }: { onClose: () => void }) {
+  const [s, setS] = useState({
+    kotApp: false, autoKot: false, autoBill: false,
+    remotePrint: false, kotBtn: true, billBtn: true, withoutKot: false,
+    successNotif: true, kotSummary: true, billSummary: true,
+  });
+  const Toggle = ({ k, title, sub }: { k: keyof typeof s; title: string; sub: string }) => (
+    <label className="flex items-start justify-between gap-3 py-2 cursor-pointer">
+      <div className="min-w-0">
+        <div className="text-[13px] font-semibold text-[#111827]">{title}</div>
+        <div className="text-[11px] text-[#64748B]">{sub}</div>
+      </div>
+      <span className={`relative inline-block w-10 h-5 rounded-full shrink-0 mt-1 transition ${s[k] ? "bg-[#0D9488]" : "bg-[#CBD5E1]"}`}>
+        <input type="checkbox" className="sr-only" checked={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.checked })} />
+        <span className={`absolute top-0.5 left-0.5 size-4 bg-white rounded-full transition-transform ${s[k] ? "translate-x-5" : ""}`} />
+      </span>
+    </label>
+  );
+  const Section = ({ title, tone, children }: { title: string; tone?: string; children: React.ReactNode }) => (
+    <div className="rounded-lg p-3" style={tone ? { background: tone } : { background: "#F9FAFB" }}>
+      <div className="text-[11px] font-bold uppercase tracking-wide text-[#64748B] mb-1">{title}</div>
+      {children}
+    </div>
+  );
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="bg-[#0D9488] text-white px-6 py-4 flex items-center justify-between sticky top-0">
+          <h2 className="text-[16px] font-bold">Printer Setup</h2>
+          <button onClick={onClose} className="size-8 rounded hover:bg-white/10 inline-flex items-center justify-center"><X className="size-4" /></button>
+        </div>
+        <div className="p-5 space-y-3">
+          <Section title="Auto-Print via KOT Printer App" tone="#EFF6FF">
+            <Toggle k="kotApp" title="KOT Printer App" sub="Enable automatic printing via desktop app" />
+            <Toggle k="autoKot" title="Auto-Print on KOT" sub="Print when order is sent to kitchen" />
+            <Toggle k="autoBill" title="Auto-Print on Billing" sub="Print bill when billing is completed" />
+          </Section>
+          <Section title="Remote Print">
+            <Toggle k="remotePrint" title="Real-time Print Events" sub="Send print events so desktop/KOT app can auto-print" />
+          </Section>
+          <Section title="Button Settings">
+            <Toggle k="kotBtn" title="KOT & Print Button" sub="Show combined button to send KOT and print slip" />
+            <Toggle k="billBtn" title="Bill & Print Button" sub="Show combined button to complete billing and print" />
+            <Toggle k="withoutKot" title="Update Without KOT" sub="Allow saving changes without sending to kitchen" />
+          </Section>
+          <Section title="Display Settings">
+            <Toggle k="successNotif" title="Show Success Notifications" sub="Show order/billing success messages on dashboard" />
+            <Toggle k="kotSummary" title="KOT Summary After Order" sub="Show order summary after placing order" />
+            <Toggle k="billSummary" title="Bill Summary After Billing" sub="Show bill summary after billing" />
+          </Section>
+          <button className="w-full text-left text-[12px] font-semibold text-[#0D9488] hover:underline pt-2">
+            Advanced Print Settings (Receipt Layout, Logo, KOT Exclusion) →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
