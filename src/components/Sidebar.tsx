@@ -1,7 +1,7 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   Home, Receipt, ClipboardList, Flame, Grid3x3, UtensilsCrossed, Package,
-  UserRound, CalendarCheck, CalendarDays, Users, BarChart3, Settings,
+  UserRound, CalendarDays, Users, BarChart3, Settings,
   DoorOpen, ChevronLeft, ChevronRight, Menu as MenuIcon, UtensilsCrossed as ForkIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,14 +20,13 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { to: "/dashboard", icon: Home, label: "Home", color: "#7C3AED", divideAfter: true },
-  { to: "/orders", icon: Receipt, label: "Dashboard Billing", color: "#DC2626" },
+  { to: "/orders", icon: Receipt, label: "Dashboard Billing", color: "#0D9488" },
   { to: "/history", icon: ClipboardList, label: "Orders", color: "#F59E0B" },
-  { to: "/kitchen", icon: Flame, label: "Kitchen", color: "#EF4444", divideAfter: true },
+  { to: "/kitchen", icon: Flame, label: "Kitchen", color: "#F59E0B", divideAfter: true },
   { to: "/tables", icon: Grid3x3, label: "Tables", color: "#475569" },
   { to: "/menu", icon: UtensilsCrossed, label: "Menu", color: "#16A34A" },
   { to: "/inventory", icon: Package, label: "Inventory", color: "#0D9488" },
   { to: "/customers", icon: UserRound, label: "Customers", color: "#2563EB" },
-  { to: "/attendance", icon: CalendarCheck, label: "Attendance", color: "#DB2777" },
   { to: "/bookings", icon: CalendarDays, label: "Bookings", color: "#4F46E5", divideAfter: true },
   { to: "/staff", icon: Users, label: "Staff", color: "#0891B2" },
   { to: "/reports", icon: BarChart3, label: "Reports", color: "#D97706" },
@@ -117,7 +116,7 @@ export function Sidebar() {
       <div className="border-t border-[#F1F5F9] p-2 flex flex-col gap-2">
         {!collapsed ? (
           <>
-            <div className="flex items-center gap-2 px-2 py-1">
+            <Link to="/profile" className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-[#F9FAFB]">
               <div className="size-9 rounded-full bg-[#0D9488] text-white text-sm font-semibold flex items-center justify-center shrink-0">
                 {name?.[0]?.toUpperCase() ?? "U"}
               </div>
@@ -125,7 +124,7 @@ export function Sidebar() {
                 <div className="text-[14px] font-semibold text-[#111827] truncate">{name || "User"}</div>
                 <div className="text-[12px] text-[#6B7280] capitalize truncate">{role || "—"}</div>
               </div>
-            </div>
+            </Link>
             <button
               onClick={logout}
               className="h-11 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#FEE2E2] text-[#DC2626] hover:bg-[#FECACA] text-[14px] font-semibold"
@@ -141,9 +140,9 @@ export function Sidebar() {
           </>
         ) : (
           <>
-            <div className="size-9 mx-auto rounded-full bg-[#0D9488] text-white text-sm font-semibold flex items-center justify-center">
+            <Link to="/profile" className="size-9 mx-auto rounded-full bg-[#0D9488] text-white text-sm font-semibold flex items-center justify-center">
               {name?.[0]?.toUpperCase() ?? "U"}
-            </div>
+            </Link>
             <button
               onClick={() => setCollapsed(false)}
               title="Expand"
