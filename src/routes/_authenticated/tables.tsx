@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Pencil, ArrowUp, ArrowDown } from "lucide-react";
+import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check, ChevronLeft, ChevronRight, Calendar, Pencil, ArrowUp, ArrowDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -146,7 +146,7 @@ function TablesPage() {
         <div className="relative">
           <button onClick={() => setDatePopOpen((v) => !v)}
             className={`h-9 px-4 inline-flex items-center gap-2 rounded-full text-[13px] font-semibold ${isToday(selectedDate) ? "bg-[#0D9488] text-white" : "bg-white border border-[#E2E8F0] text-[#374151]"}`}>
-            <CalendarIcon className="size-4" />
+            <Calendar className="size-4" />
             {isToday(selectedDate) ? "Today" : selectedDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
           </button>
           {datePopOpen && <DatePopover value={selectedDate} onChange={(d) => { setSelectedDate(d); setDatePopOpen(false); }} onClose={() => setDatePopOpen(false)} />}
