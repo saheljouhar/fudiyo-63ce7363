@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check } from "lucide-react";
+import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check, ChevronLeft, ChevronRight, Calendar, Pencil, ArrowUp, ArrowDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,9 @@ function TablesPage() {
   const [resetOpen, setResetOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [datePopOpen, setDatePopOpen] = useState(false);
+  const [editingFloor, setEditingFloor] = useState<string | null>(null);
 
   // ticking for elapsed time
   useEffect(() => {
@@ -132,6 +135,27 @@ function TablesPage() {
       {resetOpen && <ResetConfirm onCancel={() => setResetOpen(false)} onConfirm={doResetAll} />}
       {addOpen && <AddTableModal floors={floors} onClose={() => setAddOpen(false)} />}
       {qrOpen && <QrCodesModal tables={tables} onClose={() => setQrOpen(false)} />}
+      {editingFloor && <EditFloorModal floor={editingFloor} floors={floors} onClose={() => setEditingFloor(null)} />}
+
+      {/* Date navigation */}
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={() => setSelectedDate((d) => new Date(d.getTime() - 86400000))}
+          className="size-9 rounded-md border border-[#E2E8F0] bg-white inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F9FAFB]">
+          <ChevronLeft className="size-4" />
+        </button>
+        <div className="relative">
+          <button onClick={() => setDatePopOpen((v) => !v)}
+            className={`h-9 px-4 inline-flex items-center gap-2 rounded-full text-[13px] font-semibold ${isToday(selectedDate) ? "bg-[#0D9488] text-white" : "bg-white border border-[#E2E8F0] text-[#374151]"}`}>
+            <Calendar className="size-4" />
+            {isToday(selectedDate) ? "Today" : selectedDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+          </button>
+          {datePopOpen && <DatePopover value={selectedDate} onChange={(d) => { setSelectedDate(d); setDatePopOpen(false); }} onClose={() => setDatePopOpen(false)} />}
+        </div>
+        <button onClick={() => setSelectedDate((d) => new Date(d.getTime() + 86400000))}
+          className="size-9 rounded-md border border-[#E2E8F0] bg-white inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F9FAFB]">
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
 
       {/* Section tabs (toggle, underline) */}
       <div className="flex items-center gap-1 border-b border-[#E2E8F0] mb-5">
@@ -152,6 +176,17 @@ function TablesPage() {
           </div>
 
           {/* Floor tabs */}
+          {activeFloor !== "all" && (
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[14px] font-semibold text-[#111827]">
+                {activeFloor} · <span className="text-[#64748B] font-normal">{tables.filter((t) => t.floor === activeFloor).length} tables</span>
+              </div>
+              <button onClick={() => setEditingFloor(activeFloor)}
+                className="size-8 rounded-md hover:bg-[#F1F5F9] inline-flex items-center justify-center text-[#6B7280]" title="Edit floor">
+                <Pencil className="size-4" />
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-2 mb-5 flex-wrap">
             <FloorTab active={activeFloor === "all"} onClick={() => setActiveFloor("all")} label="All Floors" count={tables.length} />
             {floors.map((f) => (
@@ -375,6 +410,125 @@ function ResetConfirm({ onCancel, onConfirm }: { onCancel: () => void; onConfirm
           <button onClick={onCancel} className="h-10 px-4 rounded-md border border-gray-300 text-sm font-semibold hover:bg-gray-50">Cancel</button>
           <button onClick={onConfirm} className="h-10 px-4 rounded-md bg-[#DC2626] hover:bg-[#B91C1C] text-white text-sm font-semibold">Reset All</button>
         </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function isToday(d: Date) {
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
+function DatePopover({ value, onChange, onClose }: { value: Date; onChange: (d: Date) => void; onClose: () => void }) {
+  const [from, setFrom] = useState(value.toISOString().slice(0, 10));
+  const [to, setTo] = useState(value.toISOString().slice(0, 10));
+  const setPreset = (days: number) => { const d = new Date(); d.setDate(d.getDate() - (days - 1)); onChange(d); };
+  const pills: { k: string; days: number; label: string; active: boolean }[] = [
+    { k: "today", days: 1, label: "Today", active: isToday(value) },
+    { k: "7", days: 7, label: "7 Days", active: false },
+    { k: "30", days: 30, label: "30 Days", active: false },
+    { k: "90", days: 90, label: "90 Days", active: false },
+  ];
+  return (
+    <>
+      <div className="fixed inset-0 z-30" onClick={onClose} />
+      <div className="absolute left-0 mt-2 w-[340px] bg-white rounded-xl shadow-lg border border-[#E2E8F0] z-40 p-4">
+        <div className="text-[14px] font-bold text-[#111827]">Select Time Period</div>
+        <div className="text-[12px] text-[#64748B] mb-3">Choose a date range for your data</div>
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {pills.map((p) => (
+            <button key={p.k} onClick={() => { if (p.k === "today") onChange(new Date()); else setPreset(p.days); }}
+              className={`h-11 rounded-xl border text-[13px] font-semibold inline-flex items-center justify-center gap-2 ${p.active ? "border-[#0D9488] bg-[#0D9488] text-white" : "border-[#E2E8F0] bg-white text-[#374151] hover:bg-[#F8FAFC]"}`}>
+              <Calendar className="size-4" /> {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="text-[11px] font-semibold uppercase text-[#94A3B8] mb-2">Custom Range</div>
+        <div className="flex items-center gap-2 mb-3">
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="flex-1 h-10 rounded-md border border-[#E2E8F0] px-2 text-[13px]" />
+          <span className="text-[#94A3B8]">→</span>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="flex-1 h-10 rounded-md border border-[#E2E8F0] px-2 text-[13px]" />
+        </div>
+        <button onClick={() => { const d = new Date(from); if (!isNaN(d.getTime())) onChange(d); }}
+          className="w-full h-11 rounded-md bg-[#0D9488] hover:bg-[#0F766E] text-white text-[13px] font-semibold">Apply Custom Range</button>
+      </div>
+    </>
+  );
+}
+
+function EditFloorModal({ floor, floors, onClose }: { floor: string; floors: string[]; onClose: () => void }) {
+  const [tab, setTab] = useState<"details" | "order">("details");
+  const [name, setName] = useState(floor);
+  const [desc, setDesc] = useState("");
+  const [area, setArea] = useState<"none" | "standard" | "premium">("none");
+  const [order, setOrder] = useState<string[]>(floors);
+
+  const move = (i: number, dir: -1 | 1) => {
+    const next = [...order];
+    const j = i + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j], next[i]];
+    setOrder(next);
+  };
+
+  return (
+    <ModalShell onClose={onClose} width="max-w-lg">
+      <div className="px-6 py-4 border-b flex items-center justify-between">
+        <h2 className="text-base font-bold">Edit Floor</h2>
+        <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
+      </div>
+      <div className="flex border-b">
+        <button onClick={() => setTab("details")}
+          className={`flex-1 h-11 text-[13px] font-semibold ${tab === "details" ? "text-[#0D9488] border-b-2 border-[#0D9488]" : "text-[#64748B]"}`}>
+          Details
+        </button>
+        <button onClick={() => setTab("order")}
+          className={`flex-1 h-11 text-[13px] font-semibold ${tab === "order" ? "text-[#0D9488] border-b-2 border-[#0D9488]" : "text-[#64748B]"}`}>
+          Floor Order
+        </button>
+      </div>
+      <div className="p-6 space-y-4">
+        {tab === "details" ? (
+          <>
+            <div>
+              <label className="text-[12px] font-semibold text-[#64748B]">Floor Name *</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full h-10 rounded-md border border-[#E2E8F0] px-3 text-[14px]" />
+            </div>
+            <div>
+              <label className="text-[12px] font-semibold text-[#64748B]">Description</label>
+              <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={3} className="mt-1 w-full rounded-md border border-[#E2E8F0] px-3 py-2 text-[14px] resize-none" />
+            </div>
+            <div>
+              <label className="text-[12px] font-semibold text-[#64748B]">Area Charge</label>
+              <select value={area} onChange={(e) => setArea(e.target.value as "none" | "standard" | "premium")}
+                className="mt-1 w-full h-10 rounded-md border border-[#E2E8F0] px-3 text-[14px] bg-white">
+                <option value="none">None</option><option value="standard">Standard</option><option value="premium">Premium</option>
+              </select>
+            </div>
+            <button onClick={() => { toast.success("Floor updated"); onClose(); }}
+              className="w-full h-11 rounded-md bg-[#0D9488] hover:bg-[#0F766E] text-white text-[14px] font-semibold">
+              Update Floor
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-[13px] text-[#64748B]">Drag floors up or down to set display order on dashboard and tables page.</p>
+            <ul className="space-y-2">
+              {order.map((f, i) => (
+                <li key={f} className="flex items-center gap-2 h-11 px-3 rounded-md border border-[#E2E8F0] bg-white">
+                  <span className="flex-1 text-[14px] font-medium">{f}</span>
+                  <button onClick={() => move(i, -1)} className="size-8 rounded hover:bg-[#F1F5F9] inline-flex items-center justify-center text-[#64748B]"><ArrowUp className="size-4" /></button>
+                  <button onClick={() => move(i, 1)} className="size-8 rounded hover:bg-[#F1F5F9] inline-flex items-center justify-center text-[#64748B]"><ArrowDown className="size-4" /></button>
+                </li>
+              ))}
+            </ul>
+            <button onClick={() => { toast.success("Order saved"); onClose(); }}
+              className="w-full h-11 rounded-md bg-[#0D9488] hover:bg-[#0F766E] text-white text-[14px] font-semibold">
+              Save Order
+            </button>
+          </>
+        )}
       </div>
     </ModalShell>
   );

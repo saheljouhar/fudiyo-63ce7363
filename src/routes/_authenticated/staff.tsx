@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
-import { Plus, Users } from "lucide-react";
+import { Plus, Users, Eye, EyeOff, X, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/staff")({
@@ -109,14 +109,27 @@ function Accounts() {
   );
 }
 
+const ROLE_DESC: Record<Role, string> = {
+  waiter: "Access to Dashboard Billing and Tables only",
+  kitchen: "Access to Kitchen Display only",
+  accountant: "Access to Dashboard Billing, Orders, and Reports",
+  manager: "Full access to all pages",
+};
+
 function AddStaffModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ name: "", email: "", role: "waiter" as Role, password: "" });
+  const [form, setForm] = useState({
+    name: "", email: "", phone: "", role: "waiter" as Role,
+    password: "", confirm: "", pin: "", active: true,
+  });
+  const [showPw, setShowPw] = useState(false);
+  const [showPw2, setShowPw2] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
-    if (!form.name || !form.email || form.password.length < 8) {
-      toast.error("All fields required, password ≥ 8 chars"); return;
-    }
+    if (!form.name || !form.email) return toast.error("Name and email are required");
+    if (form.password.length < 8) return toast.error("Password must be at least 8 characters");
+    if (form.password !== form.confirm) return toast.error("Passwords do not match");
+    if (form.pin && !/^\d{4}$/.test(form.pin)) return toast.error("PIN must be 4 digits");
     setSaving(true);
     const { data, error } = await supabase.auth.signUp({
       email: form.email,
@@ -126,33 +139,78 @@ function AddStaffModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     if (error) { toast.error(error.message); setSaving(false); return; }
     const userId = data.user?.id;
     if (userId) {
-      await supabase.from("profiles").upsert({ id: userId, name: form.name, email: form.email });
+      await supabase.from("profiles").upsert({ id: userId, name: form.name, email: form.email, is_active: form.active });
       await supabase.from("user_roles").insert({ user_id: userId, role: form.role });
     }
     setSaving(false);
-    toast.success("Staff member created");
+    toast.success("Staff account created");
     onSaved();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-card rounded-xl border border-border w-full max-w-md p-6">
-        <h2 className="text-lg font-semibold mb-4">Add Staff Member</h2>
-        <div className="space-y-3">
-          <div><label className="text-xs font-semibold text-muted-foreground">Full name</label><input className="w-full h-10 px-3 mt-1 rounded-md border border-input bg-background text-sm" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-          <div><label className="text-xs font-semibold text-muted-foreground">Email</label><input type="email" className="w-full h-10 px-3 mt-1 rounded-md border border-input bg-background text-sm" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-          <div><label className="text-xs font-semibold text-muted-foreground">Role</label>
-            <select className="w-full h-10 px-3 mt-1 rounded-md border border-input bg-background text-sm" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
-              <option value="waiter">Waiter</option><option value="kitchen">Kitchen</option><option value="accountant">Accountant</option><option value="manager">Manager</option>
-            </select>
-          </div>
-          <div><label className="text-xs font-semibold text-muted-foreground">Temporary password</label><input type="text" className="w-full h-10 px-3 mt-1 rounded-md border border-input bg-background text-sm" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="min 8 chars" /></div>
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-lg max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div className="bg-[#0D9488] text-white px-6 py-4 flex items-center justify-between">
+          <h2 className="text-[16px] font-bold">Add Staff Member</h2>
+          <button onClick={onClose} className="size-8 rounded hover:bg-white/10 inline-flex items-center justify-center"><X className="size-4" /></button>
         </div>
-        <div className="flex gap-2 mt-6">
-          <button onClick={onClose} className="flex-1 h-10 rounded-md border border-input text-sm font-semibold">Cancel</button>
-          <button onClick={save} disabled={saving} className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">{saving ? "Creating..." : "Create Account"}</button>
+        <div className="p-6 space-y-3">
+          <Field label="Full Name *"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full h-10 px-3 rounded-md border border-[#E2E8F0] text-sm" /></Field>
+          <Field label="Email Address *" hint="This becomes their login email"><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full h-10 px-3 rounded-md border border-[#E2E8F0] text-sm" /></Field>
+          <Field label="Phone Number"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full h-10 px-3 rounded-md border border-[#E2E8F0] text-sm" /></Field>
+          <Field label="Role *">
+            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })} className="w-full h-10 px-3 rounded-md border border-[#E2E8F0] bg-white text-sm">
+              <option value="waiter">Waiter</option>
+              <option value="kitchen">Kitchen Staff</option>
+              <option value="accountant">Accountant</option>
+              <option value="manager">Manager</option>
+            </select>
+            <div className="mt-1 text-xs text-[#64748B]">{ROLE_DESC[form.role]}</div>
+          </Field>
+          <Field label="Password *">
+            <div className="relative">
+              <input type={showPw ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="min 8 chars" className="w-full h-10 px-3 pr-10 rounded-md border border-[#E2E8F0] text-sm" />
+              <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 size-7 inline-flex items-center justify-center text-[#6B7280]">
+                {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+          </Field>
+          <Field label="Confirm Password *">
+            <div className="relative">
+              <input type={showPw2 ? "text" : "password"} value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} className="w-full h-10 px-3 pr-10 rounded-md border border-[#E2E8F0] text-sm" />
+              <button type="button" onClick={() => setShowPw2((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 size-7 inline-flex items-center justify-center text-[#6B7280]">
+                {showPw2 ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+          </Field>
+          <Field label="PIN (optional)" hint="4-digit numeric for quick login on shared devices">
+            <input inputMode="numeric" maxLength={4} value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, "") })} className="w-full h-10 px-3 rounded-md border border-[#E2E8F0] text-sm" />
+          </Field>
+          <label className="flex items-center gap-2 pt-1 cursor-pointer">
+            <span className={`relative inline-block w-10 h-5 rounded-full transition ${form.active ? "bg-[#0D9488]" : "bg-[#CBD5E1]"}`}>
+              <input type="checkbox" className="sr-only" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+              <span className={`absolute top-0.5 left-0.5 size-4 bg-white rounded-full transition-transform ${form.active ? "translate-x-5" : ""}`} />
+            </span>
+            <span className="text-sm font-semibold text-[#111827]">Active</span>
+          </label>
+        </div>
+        <div className="px-6 py-4 border-t border-[#E2E8F0] flex gap-2">
+          <button onClick={onClose} className="flex-1 h-11 rounded-md border border-[#E2E8F0] text-sm font-semibold text-[#374151] hover:bg-[#F9FAFB]">Cancel</button>
+          <button onClick={save} disabled={saving} className="flex-1 h-11 rounded-md bg-[#0D9488] hover:bg-[#0F766E] text-white text-sm font-semibold disabled:opacity-50">
+            {saving ? "Creating..." : "Create Staff Account"}
+          </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-xs font-semibold text-[#374151]">{label}</label>
+      <div className="mt-1">{children}</div>
+      {hint && <div className="mt-1 text-xs text-[#94A3B8]">{hint}</div>}
     </div>
   );
 }
@@ -173,5 +231,19 @@ function Attendance() {
 }
 
 function Shifts() {
-  return <div className="rounded-xl border border-border bg-card p-10 text-center text-sm text-muted-foreground">Weekly shift calendar ships next phase.</div>;
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-[#111827]">Shifts</h2>
+        <button onClick={() => toast("Add Shift coming soon")} className="h-9 px-3 rounded-md bg-[#0D9488] hover:bg-[#0F766E] text-white text-sm font-semibold inline-flex items-center gap-1">
+          <Plus className="size-4" /> Add Shift
+        </button>
+      </div>
+      <div className="rounded-xl border border-[#E2E8F0] bg-white p-10 text-center">
+        <Clock className="size-10 mx-auto text-[#CBD5E1] mb-2" />
+        <div className="text-sm font-semibold text-[#111827]">No shifts created yet</div>
+        <div className="text-xs text-[#64748B] mt-1">Create shifts to manage staff working hours.</div>
+      </div>
+    </>
+  );
 }

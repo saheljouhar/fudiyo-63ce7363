@@ -7,6 +7,7 @@ import {
   BarChart3, Users, UtensilsCrossed, Package, Settings as SettingsIcon, LineChart as LineIcon,
   Grid3x3, IndianRupee, ShoppingCart, TrendingUp, RefreshCcw, Calendar, ShoppingBag,
   Sparkles, Trophy, ArrowUp, ArrowDown, Minus, X, AlertTriangle, PlusCircle, FileText,
+  ChevronDown, ChevronUp, ArrowLeft, Download,
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -140,7 +141,8 @@ function DateRangeButton({ value, onChange }: { value: DateRange; onChange: (r: 
         onClick={() => setOpen((v) => !v)}
         className="h-12 px-4 inline-flex items-center gap-2 rounded-lg border border-[#E2E8F0] bg-white text-[15px] font-medium text-[#374151]"
       >
-        <Calendar className="size-4" /> {value.label} ∨
+        <Calendar className="size-4" /> {value.label}
+        {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
       </button>
       {open && (
         <div className="absolute right-0 mt-2 w-[340px] bg-white rounded-xl shadow-lg border border-[#E2E8F0] z-50 p-4">
@@ -153,7 +155,7 @@ function DateRangeButton({ value, onChange }: { value: DateRange; onChange: (r: 
                 <button
                   key={p.k}
                   onClick={() => pick(p.k)}
-                  className={`h-12 inline-flex items-center justify-center gap-2 rounded-xl border text-[14px] font-semibold ${active ? "border-[#DC2626] bg-[#FEE2E2] text-[#DC2626]" : "border-[#E2E8F0] bg-white text-[#374151] hover:bg-[#F8FAFC]"}`}
+                  className={`h-12 inline-flex items-center justify-center gap-2 rounded-xl border text-[14px] font-semibold ${active ? "border-[#0D9488] bg-[#0D9488] text-white" : "border-[#E2E8F0] bg-white text-[#374151] hover:bg-[#F8FAFC]"}`}
                 >
                   <Calendar className="size-4" /> {p.label}
                 </button>
@@ -166,7 +168,7 @@ function DateRangeButton({ value, onChange }: { value: DateRange; onChange: (r: 
             <span className="text-[#94A3B8]">→</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="flex-1 h-10 rounded-md border border-[#E2E8F0] px-2 text-[14px]" />
           </div>
-          <button onClick={applyCustom} className="w-full h-11 rounded-md bg-[#DC2626] hover:bg-[#B91C1C] text-white text-[14px] font-semibold">Apply Custom Range</button>
+          <button onClick={applyCustom} className="w-full h-11 rounded-md bg-[#0D9488] hover:bg-[#0F766E] text-white text-[14px] font-semibold">Apply Custom Range</button>
         </div>
       )}
     </div>
@@ -619,6 +621,7 @@ function InventoryTab() {
 function ReportsTab() {
   const [from, setFrom] = useState(toInputDate(new Date()));
   const [to, setTo] = useState(toInputDate(new Date()));
+  const [selected, setSelected] = useState<string | null>(null);
   const cards = [
     "Sales Summary", "Inventory Comparison", "Consolidated P&L",
     "Menu Performance", "Outlet Ranking", "Staff Performance",
@@ -626,6 +629,11 @@ function ReportsTab() {
     "Customer Insights", "Payment Analytics", "Order Analytics",
     "Revenue Trends", "Wallet & Loyalty",
   ];
+
+  if (selected) {
+    return <ReportDetail name={selected} from={from} to={to} setFrom={setFrom} setTo={setTo} onBack={() => setSelected(null)} />;
+  }
+
   return (
     <div className="space-y-5">
       <Card>
@@ -643,16 +651,114 @@ function ReportsTab() {
       </Card>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {cards.map((c) => (
-          <Link key={c} to="/reports" className="rounded-2xl bg-white border border-[#E2E8F0] p-5 hover:border-[#16A34A]/50 transition-colors flex items-start gap-3">
-            <div className="size-10 rounded-lg bg-[#16A34A]/10 text-[#16A34A] inline-flex items-center justify-center"><FileText className="size-5" /></div>
+          <button key={c} onClick={() => setSelected(c)} className="text-left rounded-2xl bg-white border border-[#E2E8F0] p-5 hover:border-[#0D9488]/50 transition-colors flex items-start gap-3">
+            <div className="size-10 rounded-lg bg-[#0D9488]/10 text-[#0D9488] inline-flex items-center justify-center"><FileText className="size-5" /></div>
             <div className="flex-1 min-w-0">
               <div className="text-[15px] font-semibold text-[#111827]">{c}</div>
               <div className="text-[12px] text-[#64748B] mt-0.5">Tap to open report</div>
             </div>
-          </Link>
+          </button>
         ))}
       </div>
-      <div className="text-right"><Link to="/reports" className="text-[13px] font-medium text-[#0D9488] hover:text-[#0F766E]">→ Open Full Reports</Link></div>
+    </div>
+  );
+}
+
+const REPORT_STATS: Record<string, { label: string; tone: string }[]> = {
+  "Sales Summary": [
+    { label: "Total Revenue", tone: "#16A34A" }, { label: "Total Orders", tone: "#2563EB" },
+    { label: "Avg Ticket Size", tone: "#7C3AED" }, { label: "Tips + Service", tone: "#F59E0B" },
+  ],
+  "Inventory Comparison": [
+    { label: "Items in Stock", tone: "#0D9488" }, { label: "Low Stock Items", tone: "#DC2626" },
+    { label: "Total Value", tone: "#16A34A" }, { label: "Categories", tone: "#2563EB" },
+  ],
+  "Consolidated P&L": [
+    { label: "Total Revenue", tone: "#16A34A" }, { label: "Total Cost", tone: "#DC2626" },
+    { label: "Gross Profit", tone: "#0D9488" }, { label: "Margin %", tone: "#F59E0B" },
+  ],
+  "Menu Performance": [
+    { label: "Top Selling Item", tone: "#0D9488" }, { label: "Total Items Sold", tone: "#2563EB" },
+    { label: "Avg Items/Order", tone: "#7C3AED" }, { label: "Items with 0 sales", tone: "#DC2626" },
+  ],
+  "Staff Performance": [
+    { label: "Staff Name", tone: "#0D9488" }, { label: "Orders Handled", tone: "#2563EB" },
+    { label: "Revenue Generated", tone: "#16A34A" }, { label: "Avg Order Value", tone: "#F59E0B" },
+  ],
+  "Discounts & Offers": [
+    { label: "Total Discounts", tone: "#DC2626" }, { label: "Discounted Orders", tone: "#2563EB" },
+    { label: "Avg Discount", tone: "#F59E0B" }, { label: "Top Offer", tone: "#0D9488" },
+  ],
+  "Tax Summary": [
+    { label: "Total Tax", tone: "#16A34A" }, { label: "CGST", tone: "#2563EB" },
+    { label: "SGST", tone: "#7C3AED" }, { label: "Orders with Tax", tone: "#0D9488" },
+  ],
+  "Customer Insights": [
+    { label: "Total Customers", tone: "#0D9488" }, { label: "New Customers", tone: "#16A34A" },
+    { label: "Returning", tone: "#2563EB" }, { label: "Avg Visits", tone: "#F59E0B" },
+  ],
+  "Payment Analytics": [
+    { label: "Cash", tone: "#16A34A" }, { label: "Card", tone: "#2563EB" },
+    { label: "UPI", tone: "#7C3AED" }, { label: "Other", tone: "#6B7280" },
+  ],
+  "Order Analytics": [
+    { label: "Dine-in", tone: "#0D9488" }, { label: "Takeaway", tone: "#F59E0B" },
+    { label: "Delivery", tone: "#2563EB" }, { label: "Total", tone: "#16A34A" },
+  ],
+  "Wallet & Loyalty": [
+    { label: "Points Issued", tone: "#0D9488" }, { label: "Points Redeemed", tone: "#16A34A" },
+    { label: "Active Members", tone: "#2563EB" }, { label: "Redemption Rate", tone: "#F59E0B" },
+  ],
+  "Category Sales": [
+    { label: "Categories", tone: "#0D9488" }, { label: "Total Sales", tone: "#16A34A" },
+  ],
+  "Outlet Ranking": [
+    { label: "Outlets", tone: "#0D9488" }, { label: "Total Revenue", tone: "#16A34A" },
+  ],
+  "Revenue Trends": [
+    { label: "Peak Day", tone: "#0D9488" }, { label: "Total Revenue", tone: "#16A34A" },
+  ],
+};
+
+function ReportDetail({ name, from, to, setFrom, setTo, onBack }: {
+  name: string; from: string; to: string; setFrom: (v: string) => void; setTo: (v: string) => void; onBack: () => void;
+}) {
+  const stats = REPORT_STATS[name] ?? [{ label: "Value", tone: "#0D9488" }];
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={onBack} className="h-9 px-3 inline-flex items-center gap-1 rounded-md border border-[#E2E8F0] bg-white text-[13px] font-semibold text-[#374151] hover:bg-[#F9FAFB]">
+          <ArrowLeft className="size-4" /> Back
+        </button>
+        <div className="flex items-center gap-2">
+          <div className="size-10 rounded-lg bg-[#0D9488]/10 text-[#0D9488] inline-flex items-center justify-center"><FileText className="size-5" /></div>
+          <h2 className="text-[20px] font-bold text-[#111827]">{name}</h2>
+        </div>
+        <div className="ml-auto flex items-end gap-2">
+          <div>
+            <div className="text-[11px] text-[#64748B] mb-1">From</div>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 rounded-md border border-[#E2E8F0] px-2 text-[14px]" />
+          </div>
+          <div>
+            <div className="text-[11px] text-[#64748B] mb-1">To</div>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 rounded-md border border-[#E2E8F0] px-2 text-[14px]" />
+          </div>
+          <button className="h-10 px-4 rounded-md bg-[#0D9488] text-white text-[13px] font-semibold">Apply</button>
+          <button className="h-10 px-4 rounded-md bg-[#0D9488] text-white text-[13px] font-semibold inline-flex items-center gap-1"><Download className="size-4" /> Export</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-2xl bg-white border border-[#E2E8F0] p-5">
+            <div className="text-[12px] font-semibold uppercase text-[#64748B] tracking-wide">{s.label}</div>
+            <div className="text-[24px] font-bold mt-1" style={{ color: s.tone }}>—</div>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-2xl bg-white border border-[#E2E8F0] p-10 text-center">
+        <FileText className="size-10 mx-auto text-[#CBD5E1] mb-2" />
+        <div className="text-[14px] text-[#64748B]">No data for selected period.</div>
+      </div>
     </div>
   );
 }

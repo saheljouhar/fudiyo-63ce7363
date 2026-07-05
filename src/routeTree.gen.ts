@@ -16,6 +16,7 @@ import { Route as AuthenticatedTablesRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedStaffRouteImport } from './routes/_authenticated/staff'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
+import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedOrdersRouteImport } from './routes/_authenticated/orders'
 import { Route as AuthenticatedMenuRouteImport } from './routes/_authenticated/menu'
 import { Route as AuthenticatedKitchenRouteImport } from './routes/_authenticated/kitchen'
@@ -58,6 +59,11 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
 const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedOrdersRoute = AuthenticatedOrdersRouteImport.update({
@@ -118,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/kitchen': typeof AuthenticatedKitchenRoute
   '/menu': typeof AuthenticatedMenuRoute
   '/orders': typeof AuthenticatedOrdersRoute
+  '/profile': typeof AuthenticatedProfileRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/staff': typeof AuthenticatedStaffRoute
@@ -135,6 +142,7 @@ export interface FileRoutesByTo {
   '/kitchen': typeof AuthenticatedKitchenRoute
   '/menu': typeof AuthenticatedMenuRoute
   '/orders': typeof AuthenticatedOrdersRoute
+  '/profile': typeof AuthenticatedProfileRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/staff': typeof AuthenticatedStaffRoute
@@ -154,6 +162,7 @@ export interface FileRoutesById {
   '/_authenticated/kitchen': typeof AuthenticatedKitchenRoute
   '/_authenticated/menu': typeof AuthenticatedMenuRoute
   '/_authenticated/orders': typeof AuthenticatedOrdersRoute
+  '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/staff': typeof AuthenticatedStaffRoute
@@ -173,6 +182,7 @@ export interface FileRouteTypes {
     | '/kitchen'
     | '/menu'
     | '/orders'
+    | '/profile'
     | '/reports'
     | '/settings'
     | '/staff'
@@ -190,6 +200,7 @@ export interface FileRouteTypes {
     | '/kitchen'
     | '/menu'
     | '/orders'
+    | '/profile'
     | '/reports'
     | '/settings'
     | '/staff'
@@ -208,6 +219,7 @@ export interface FileRouteTypes {
     | '/_authenticated/kitchen'
     | '/_authenticated/menu'
     | '/_authenticated/orders'
+    | '/_authenticated/profile'
     | '/_authenticated/reports'
     | '/_authenticated/settings'
     | '/_authenticated/staff'
@@ -269,6 +281,13 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof AuthenticatedReportsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/profile': {
+      id: '/_authenticated/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AuthenticatedProfileRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/orders': {
@@ -347,6 +366,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedKitchenRoute: typeof AuthenticatedKitchenRoute
   AuthenticatedMenuRoute: typeof AuthenticatedMenuRoute
   AuthenticatedOrdersRoute: typeof AuthenticatedOrdersRoute
+  AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedStaffRoute: typeof AuthenticatedStaffRoute
@@ -363,6 +383,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedKitchenRoute: AuthenticatedKitchenRoute,
   AuthenticatedMenuRoute: AuthenticatedMenuRoute,
   AuthenticatedOrdersRoute: AuthenticatedOrdersRoute,
+  AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedStaffRoute: AuthenticatedStaffRoute,
@@ -381,13 +402,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

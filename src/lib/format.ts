@@ -1,12 +1,17 @@
 /** Indian number formatter: 1,00,000 */
 export function formatINR(amount: number): string {
-  const n = Math.round(Number(amount) || 0);
-  const s = n.toString();
-  if (s.length <= 3) return `₹${s}`;
-  const last3 = s.slice(-3);
-  const rest = s.slice(0, -3);
-  const withCommas = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",");
-  return `₹${withCommas},${last3}`;
+  const num = Number(amount) || 0;
+  const [whole, dec] = num.toFixed(2).split(".");
+  const s = whole;
+  let formatted: string;
+  if (s.length <= 3) formatted = s;
+  else {
+    const last3 = s.slice(-3);
+    const rest = s.slice(0, -3);
+    const withCommas = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",");
+    formatted = `${withCommas},${last3}`;
+  }
+  return `₹${formatted}.${dec}`;
 }
 
 export function formatDate(d: Date | string): string {
