@@ -108,6 +108,7 @@ function OrdersPage() {
   useEffect(() => { localStorage.setItem(LS_SOUND, notifSound ? "1" : "0"); }, [notifSound]);
   const [confirmNew, setConfirmNew] = useState(false);
   const [lookup, setLookup] = useState("");
+  const [printerOpen, setPrinterOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const catRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -332,7 +333,9 @@ function OrdersPage() {
         setNotifOpen={setNotifOpen}
         notifSound={notifSound}
         setNotifSound={setNotifSound}
+        onPrinter={() => setPrinterOpen(true)}
       />
+      {printerOpen && <PrinterSetupModal onClose={() => setPrinterOpen(false)} />}
       <div className="flex bg-[#F9FAFB]" style={{ height: "calc(100vh - 56px)" }}>
         {showTables ? (
           <TablesPreview tables={tablesData} onPick={pickTable} />
@@ -655,7 +658,7 @@ function OrdersPage() {
 function TopNav({
   toggleSidebar, search, setSearch, tableNum, orderCode, onNewOrder,
   lookup, setLookup, onLookup, showTables, setShowTables,
-  notifOpen, setNotifOpen, notifSound, setNotifSound,
+  notifOpen, setNotifOpen, notifSound, setNotifSound, onPrinter,
 }: {
   toggleSidebar: () => void; search: string; setSearch: (s: string) => void; tableNum: string;
   orderCode: string; onNewOrder: () => void;
@@ -663,6 +666,7 @@ function TopNav({
   showTables: boolean; setShowTables: (b: boolean) => void;
   notifOpen: boolean; setNotifOpen: (b: boolean) => void;
   notifSound: boolean; setNotifSound: (b: boolean) => void;
+  onPrinter: () => void;
 }) {
   const items = [
     { key: "alerts", icon: Bell, label: "Alerts", active: notifOpen, onClick: () => setNotifOpen(!notifOpen) },
@@ -686,6 +690,9 @@ function TopNav({
         <input value={lookup} onChange={(e) => setLookup(e.target.value)} placeholder="Order ID" className="h-9 w-[100px] px-2 rounded-lg border border-[#0D9488] text-[#0D9488] text-[13px] font-semibold placeholder:text-[#0D9488]/60 bg-white" />
       </form>
       <button onClick={() => toast("Voice ordering coming soon")} className="size-9 rounded-full bg-[#16A34A] text-white inline-flex items-center justify-center"><Mic className="size-4" /></button>
+      <button onClick={onPrinter} title="Printer Setup" className="size-9 rounded-lg border border-[#E5E7EB] text-[#374151] hover:bg-[#F9FAFB] inline-flex items-center justify-center">
+        <Printer className="size-4" />
+      </button>
       <button onClick={() => setShowTables(!showTables)}
         className={`h-9 px-3 rounded-lg text-[13px] font-bold inline-flex items-center gap-1 ${showTables ? "bg-[#0D9488] text-white" : "border border-[#0D9488] text-[#0D9488] bg-white"}`}>
         {showTables ? <><ClipboardList className="size-4" /> ORDERS</> : <><Armchair className="size-4" /> {tableNum ? `T${tableNum}` : "TABLES"}</>}
