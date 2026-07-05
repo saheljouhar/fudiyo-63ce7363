@@ -7,6 +7,7 @@ import {
   BarChart3, Users, UtensilsCrossed, Package, Settings as SettingsIcon, LineChart as LineIcon,
   Grid3x3, IndianRupee, ShoppingCart, TrendingUp, RefreshCcw, Calendar, ShoppingBag,
   Sparkles, Trophy, ArrowUp, ArrowDown, Minus, X, AlertTriangle, PlusCircle, FileText,
+  ChevronDown, ChevronUp, ArrowLeft, Download,
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -140,7 +141,8 @@ function DateRangeButton({ value, onChange }: { value: DateRange; onChange: (r: 
         onClick={() => setOpen((v) => !v)}
         className="h-12 px-4 inline-flex items-center gap-2 rounded-lg border border-[#E2E8F0] bg-white text-[15px] font-medium text-[#374151]"
       >
-        <Calendar className="size-4" /> {value.label} ∨
+        <Calendar className="size-4" /> {value.label}
+        {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
       </button>
       {open && (
         <div className="absolute right-0 mt-2 w-[340px] bg-white rounded-xl shadow-lg border border-[#E2E8F0] z-50 p-4">
@@ -153,7 +155,7 @@ function DateRangeButton({ value, onChange }: { value: DateRange; onChange: (r: 
                 <button
                   key={p.k}
                   onClick={() => pick(p.k)}
-                  className={`h-12 inline-flex items-center justify-center gap-2 rounded-xl border text-[14px] font-semibold ${active ? "border-[#DC2626] bg-[#FEE2E2] text-[#DC2626]" : "border-[#E2E8F0] bg-white text-[#374151] hover:bg-[#F8FAFC]"}`}
+                  className={`h-12 inline-flex items-center justify-center gap-2 rounded-xl border text-[14px] font-semibold ${active ? "border-[#0D9488] bg-[#0D9488] text-white" : "border-[#E2E8F0] bg-white text-[#374151] hover:bg-[#F8FAFC]"}`}
                 >
                   <Calendar className="size-4" /> {p.label}
                 </button>
@@ -166,7 +168,7 @@ function DateRangeButton({ value, onChange }: { value: DateRange; onChange: (r: 
             <span className="text-[#94A3B8]">→</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="flex-1 h-10 rounded-md border border-[#E2E8F0] px-2 text-[14px]" />
           </div>
-          <button onClick={applyCustom} className="w-full h-11 rounded-md bg-[#DC2626] hover:bg-[#B91C1C] text-white text-[14px] font-semibold">Apply Custom Range</button>
+          <button onClick={applyCustom} className="w-full h-11 rounded-md bg-[#0D9488] hover:bg-[#0F766E] text-white text-[14px] font-semibold">Apply Custom Range</button>
         </div>
       )}
     </div>
