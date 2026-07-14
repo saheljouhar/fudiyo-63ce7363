@@ -276,6 +276,7 @@ export type Database = {
           id: string
           is_read: boolean
           message: string
+          restaurant_id: string | null
           target_user_id: string | null
           type: Database["public"]["Enums"]["notification_type"]
         }
@@ -284,6 +285,7 @@ export type Database = {
           id?: string
           is_read?: boolean
           message: string
+          restaurant_id?: string | null
           target_user_id?: string | null
           type: Database["public"]["Enums"]["notification_type"]
         }
@@ -292,10 +294,26 @@ export type Database = {
           id?: string
           is_read?: boolean
           message?: string
+          restaurant_id?: string | null
           target_user_id?: string | null
           type?: Database["public"]["Enums"]["notification_type"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "notifications_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurant_status"
+            referencedColumns: ["restaurant_id"]
+          },
+          {
+            foreignKeyName: "notifications_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       orders: {
         Row: {
@@ -733,6 +751,7 @@ export type Database = {
       }
     }
     Functions: {
+      current_restaurant_id: { Args: never; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
