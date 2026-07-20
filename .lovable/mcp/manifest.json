@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "sdk_version": "0.24.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://odvixrdhzxhgbqpescli.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "fudiyo-mcp",
+      "version": "0.1.0",
+      "title": "Fudiyo"
+    },
+    "tools": [
+      {
+        "name": "whoami",
+        "title": "Who am I",
+        "description": "Return the signed-in Fudiyo user's profile, role, and restaurant.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_menu",
+        "title": "List menu",
+        "description": "List dishes on the signed-in user's restaurant menu, optionally filtered by category or availability.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "category": {
+              "description": "Filter by category name (case-insensitive exact match).",
+              "type": "string"
+            },
+            "available_only": {
+              "description": "If true, return only dishes currently marked available.",
+              "type": "boolean"
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_tables",
+        "title": "List tables",
+        "description": "List every table in the signed-in user's restaurant with its current status, floor, seats and occupied-since timestamp.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "floor": {
+              "description": "Filter by floor name (e.g. 'Ground', 'First').",
+              "type": "string"
+            },
+            "status": {
+              "description": "Filter by table status.",
+              "type": "string",
+              "enum": [
+                "available",
+                "occupied",
+                "reserved",
+                "bill_requested"
+              ]
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_orders_today",
+        "title": "List today's orders",
+        "description": "List orders placed today at the signed-in user's restaurant. Optionally filter by status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "status": {
+              "description": "Filter by order status.",
+              "type": "string",
+              "enum": [
+                "pending",
+                "preparing",
+                "ready",
+                "served",
+                "paid",
+                "cancelled"
+              ]
+            },
+            "limit": {
+              "description": "Max rows to return (default 50).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
