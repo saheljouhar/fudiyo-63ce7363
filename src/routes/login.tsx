@@ -9,10 +9,14 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/login")({
   component: LoginPage,
   head: () => ({ meta: [{ title: "Sign in — Fudiyo" }] }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : undefined,
+  }),
 });
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const [email, setEmail] = useState("manager@restaurant.com");
   const [password, setPassword] = useState("manager1234");
   const [loading, setLoading] = useState(false);
@@ -32,6 +36,11 @@ function LoginPage() {
       .eq("user_id", data.user.id)
       .maybeSingle();
     toast.success("Welcome back");
+    // Preserve OAuth consent (or any) redirect target if it's same-origin relative.
+    if (next && next.startsWith("/") && !next.startsWith("//")) {
+      window.location.href = next;
+      return;
+    }
     navigate({ to: landingForRole((roleRow?.role as AppRole) ?? null) });
   };
 
