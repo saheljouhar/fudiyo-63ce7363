@@ -766,6 +766,104 @@ function ReportDetail({ name, from, to, setFrom, setTo, onBack }: {
   );
 }
 
+interface DishSalesRow { id: string; name: string; category: string | null; price: number; qty: number; revenue: number }
+
+function ItemWiseSalesReport({ from, to, setFrom, setTo, onBack }: {
+  from: string; to: string; setFrom: (v: string) => void; setTo: (v: string) => void; onBack: () => void;
+}) {
+  const [rows, setRows] = useState<DishSalesRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      const start = new Date(from + "T00:00:00").toISOString();
+      const end = new Date(to + "T23:59:59").toISOString();
+      const [{ data: dishes }, { data: orders }] = await Promise.all([
+        supabase.from("dishes").select("id,name,category,price").eq("is_archived", false),
+        supabase.from("orders").select("items,created_at,status").gte("created_at", start).lte("created_at", end),
+      ]);
+      if (!alive) return;
+      const totals = new Map<string, { qty: number; revenue: number }>();
+      for (const o of (orders ?? []) as { items: unknown; status: string }[]) {
+        if (o.status === "cancelled") continue;
+        const items = Array.isArray(o.items) ? o.items : [];
+        for (const it of items as { dish_id?: string; name?: string; qty?: number; price?: number }[]) {
+          const key = it.dish_id ?? it.name ?? "";
+          if (!key) continue;
+          const cur = totals.get(key) ?? { qty: 0, revenue: 0 };
+          cur.qty += Number(it.qty ?? 0);
+          cur.revenue += Number(it.qty ?? 0) * Number(it.price ?? 0);
+          totals.set(key, cur);
+        }
+      }
+      const result: DishSalesRow[] = ((dishes ?? []) as { id: string; name: string; category: string | null; price: number }[]).map((d) => {
+        const t = totals.get(d.id) ?? totals.get(d.name) ?? { qty: 0, revenue: 0 };
+        return { id: d.id, name: d.name, category: d.category, price: Number(d.price ?? 0), qty: t.qty, revenue: t.revenue };
+      }).sort((a, b) => b.qty - a.qty);
+      setRows(result);
+      setLoading(false);
+    })();
+    return () => { alive = false; };
+  }, [from, to]);
+
+  const exportCsv = () => {
+    const header = "Item,Category,Qty Sold,Unit Price,Total Revenue\n";
+    const body = rows.map(r => `"${r.name}","${r.category ?? ""}",${r.qty},${r.price.toFixed(2)},${r.revenue.toFixed(2)}`).join("\n");
+    const blob = new Blob([header + body], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `item-wise-sales-${from}-to-${to}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={onBack} className="h-9 px-3 inline-flex items-center gap-1 rounded-md border border-[#E2E8F0] bg-white text-[13px] font-semibold text-[#374151] hover:bg-[#F9FAFB]">
+          <ArrowLeft className="size-4" /> Back
+        </button>
+        <div className="flex items-center gap-2">
+          <div className="size-10 rounded-lg bg-[#0D9488]/10 text-[#0D9488] inline-flex items-center justify-center"><FileText className="size-5" /></div>
+          <h2 className="text-[20px] font-bold text-[#111827]">Item-wise Sales</h2>
+        </div>
+        <div className="ml-auto flex items-end gap-2">
+          <div><div className="text-[11px] text-[#64748B] mb-1">From</div><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 rounded-md border border-[#E2E8F0] px-2 text-[14px]" /></div>
+          <div><div className="text-[11px] text-[#64748B] mb-1">To</div><input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 rounded-md border border-[#E2E8F0] px-2 text-[14px]" /></div>
+          <button onClick={exportCsv} className="h-10 px-4 rounded-md bg-[#0D9488] text-white text-[13px] font-semibold inline-flex items-center gap-1"><Download className="size-4" /> Export</button>
+        </div>
+      </div>
+      <div className="rounded-2xl bg-white border border-[#E2E8F0] overflow-hidden">
+        {loading ? (
+          <div className="p-10 text-center text-[14px] text-[#64748B]">Loading…</div>
+        ) : rows.length === 0 ? (
+          <div className="p-10 text-center"><FileText className="size-10 mx-auto text-[#CBD5E1] mb-2" /><div className="text-[14px] text-[#64748B]">No data for selected period.</div></div>
+        ) : (
+          <table className="w-full text-[14px]">
+            <thead className="bg-[#F8FAFC]"><tr className="text-left text-[11px] uppercase text-[#64748B] tracking-wide">
+              <th className="px-4 py-3">Item</th><th className="px-4 py-3">Category</th>
+              <th className="px-4 py-3 text-right">Qty Sold</th>
+              <th className="px-4 py-3 text-right">Unit Price</th>
+              <th className="px-4 py-3 text-right">Total Revenue</th>
+            </tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-t border-[#F1F5F9]">
+                  <td className="px-4 py-3 font-semibold text-[#111827]">{r.name}</td>
+                  <td className="px-4 py-3 text-[#64748B]">{r.category ?? "—"}</td>
+                  <td className="px-4 py-3 text-right font-semibold">{r.qty}</td>
+                  <td className="px-4 py-3 text-right">{formatINR(r.price)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-[#0D9488]">{formatINR(r.revenue)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SetupGrid() {
   const items = [
     { title: "General", desc: "Language, business type, order types", to: "/settings", search: { tab: "general" as const } },
