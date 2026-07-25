@@ -9,6 +9,9 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
   head: () => ({ meta: [{ title: "Settings — Fudiyo" }] }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    tab: (s.tab as Tab | undefined) ?? undefined,
+  }),
 });
 
 type Tab = "general" | "tax" | "print" | "payment" | "customer" | "about";
@@ -36,7 +39,8 @@ interface Restaurant {
 }
 
 function SettingsPage() {
-  const [tab, setTab] = useState<Tab>("general");
+  const { tab: initialTab } = Route.useSearch();
+  const [tab, setTab] = useState<Tab>(initialTab ?? "general");
   const [r, setR] = useState<Restaurant | null>(null);
   const reload = async () => {
     const { data } = await supabase.from("restaurants").select("*").limit(1).maybeSingle();
