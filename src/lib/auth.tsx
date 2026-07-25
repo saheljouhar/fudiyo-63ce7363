@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
-export type AppRole = "waiter" | "kitchen" | "accountant" | "manager";
+export type AppRole = "waiter" | "kitchen" | "accountant" | "manager" | "super_admin";
 
 export interface AuthState {
   user: User | null;
@@ -55,6 +55,7 @@ export const useAuth = () => useContext(Ctx);
 
 export function landingForRole(role: AppRole | null): string {
   switch (role) {
+    case "super_admin": return "/dashboard";
     case "waiter": return "/tables";
     case "kitchen": return "/kitchen";
     case "accountant": return "/history";
