@@ -765,20 +765,20 @@ function ReportDetail({ name, from, to, setFrom, setTo, onBack }: {
 
 function SetupGrid() {
   const items = [
-    ["General", "Language, business type, order types"],
-    ["Tax & Billing", "GST number, tax rate"],
-    ["Print Settings", "Paper size, printer type"],
-    ["Payment", "UPI ID, accepted methods"],
-    ["Staff Accounts", "Add and manage staff"],
-    ["Customer App Feed", "Toggle live data sharing"],
+    { title: "General", desc: "Language, business type, order types", to: "/settings", search: { tab: "general" as const } },
+    { title: "Tax & Billing", desc: "GST number, tax rate", to: "/settings", search: { tab: "tax" as const } },
+    { title: "Print Settings", desc: "Paper size, printer type", to: "/settings", search: { tab: "print" as const } },
+    { title: "Payment", desc: "UPI ID, accepted methods", to: "/settings", search: { tab: "payment" as const } },
+    { title: "Staff Accounts", desc: "Add and manage staff", to: "/staff", search: { tab: "accounts" as const } },
+    { title: "Customer App Feed", desc: "Toggle live data sharing", to: "/settings", search: { tab: "customer" as const } },
   ];
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-      {items.map(([t, d]) => (
-        <Link key={t} to="/settings" className="rounded-2xl border border-[#E2E8F0] bg-white p-5 hover:border-[#0D9488]/50 transition-colors flex items-center justify-between group shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+      {items.map((it) => (
+        <Link key={it.title} to={it.to} search={it.search as never} className="rounded-2xl border border-[#E2E8F0] bg-white p-5 hover:border-[#0D9488]/50 transition-colors flex items-center justify-between group shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
           <div>
-            <div className="text-[15px] font-semibold">{t}</div>
-            <div className="text-[13px] text-[#64748B] mt-0.5">{d}</div>
+            <div className="text-[15px] font-semibold">{it.title}</div>
+            <div className="text-[13px] text-[#64748B] mt-0.5">{it.desc}</div>
           </div>
           <span className="text-[#94A3B8] group-hover:text-[#0D9488]">→</span>
         </Link>
