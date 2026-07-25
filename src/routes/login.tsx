@@ -30,27 +30,18 @@ function LoginPage() {
       setLoading(false);
       return;
     }
-    // Check super_admin first via has_role RPC (never trust profiles.role).
-    const { data: isSuperAdmin } = await supabase.rpc("has_role", {
-      _user_id: data.user.id,
-      _role: "super_admin",
-    });
-    let effectiveRole: AppRole | null = isSuperAdmin ? "super_admin" : null;
-    if (!effectiveRole) {
-      const { data: roleRow } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
-      effectiveRole = (roleRow?.role as AppRole) ?? null;
-    }
+    const { data: roleRow } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.user.id)
+      .maybeSingle();
     toast.success("Welcome back");
     // Preserve OAuth consent (or any) redirect target if it's same-origin relative.
     if (next && next.startsWith("/") && !next.startsWith("//")) {
       window.location.href = next;
       return;
     }
-    navigate({ to: landingForRole(effectiveRole) });
+    navigate({ to: landingForRole((roleRow?.role as AppRole) ?? null) });
   };
 
   return (
