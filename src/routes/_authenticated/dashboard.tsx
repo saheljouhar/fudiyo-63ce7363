@@ -624,7 +624,7 @@ function ReportsTab() {
   const [selected, setSelected] = useState<string | null>(null);
   const cards = [
     "Sales Summary", "Inventory Comparison", "Consolidated P&L",
-    "Menu Performance", "Outlet Ranking", "Staff Performance",
+    "Menu Performance", "Item-wise Sales", "Outlet Ranking", "Staff Performance",
     "Category Sales", "Discounts & Offers", "Tax Summary",
     "Customer Insights", "Payment Analytics", "Order Analytics",
     "Revenue Trends", "Wallet & Loyalty",
@@ -724,6 +724,9 @@ function ReportDetail({ name, from, to, setFrom, setTo, onBack }: {
   name: string; from: string; to: string; setFrom: (v: string) => void; setTo: (v: string) => void; onBack: () => void;
 }) {
   const stats = REPORT_STATS[name] ?? [{ label: "Value", tone: "#0D9488" }];
+  if (name === "Item-wise Sales") {
+    return <ItemWiseSalesReport from={from} to={to} setFrom={setFrom} setTo={setTo} onBack={onBack} />;
+  }
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
