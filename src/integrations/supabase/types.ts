@@ -464,6 +464,7 @@ export type Database = {
           phone: string | null
           share_live_data: boolean
           show_upi_qr: boolean
+          status: string
           tax_rate: number
           upi_id: string | null
         }
@@ -485,6 +486,7 @@ export type Database = {
           phone?: string | null
           share_live_data?: boolean
           show_upi_qr?: boolean
+          status?: string
           tax_rate?: number
           upi_id?: string | null
         }
@@ -506,6 +508,7 @@ export type Database = {
           phone?: string | null
           share_live_data?: boolean
           show_upi_qr?: boolean
+          status?: string
           tax_rate?: number
           upi_id?: string | null
         }
@@ -766,7 +769,13 @@ export type Database = {
       is_manager: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "waiter" | "kitchen" | "accountant" | "manager" | "super_admin"
+      app_role:
+        | "waiter"
+        | "kitchen"
+        | "accountant"
+        | "manager"
+        | "super_admin"
+        | "owner"
       attendance_status: "present" | "absent" | "late" | "on_leave"
       booking_status:
         | "confirmed"
@@ -912,7 +921,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["waiter", "kitchen", "accountant", "manager", "super_admin"],
+      app_role: [
+        "waiter",
+        "kitchen",
+        "accountant",
+        "manager",
+        "super_admin",
+        "owner",
+      ],
       attendance_status: ["present", "absent", "late", "on_leave"],
       booking_status: [
         "confirmed",
