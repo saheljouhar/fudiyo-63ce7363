@@ -105,6 +105,8 @@ function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
   const [type, setType] = useState<string>("all");
   const [range, setRange] = useState<Range>("today");
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [active, setActive] = useState<{ kind: ActionKind; order: OrderRow } | null>(null);
+  const onAction = (kind: ActionKind, order: OrderRow) => setActive({ kind, order });
 
   const filtered = useMemo(() => {
     const now = Date.now();
@@ -177,15 +179,22 @@ function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
           {filtered.length === 0 ? (
             <Empty label="No orders in this range" />
           ) : filtered.map((o, idx) => (
-            <OrderCard key={o.id} o={o} idx={idx + 1} expanded={open.has(o.id)} onToggle={() => setOpen((s) => { const n = new Set(s); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n; })} />
+            <OrderCard key={o.id} o={o} idx={idx + 1} expanded={open.has(o.id)} onToggle={() => setOpen((s) => { const n = new Set(s); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n; })} onAction={onAction} />
           ))}
         </div>
       ) : (
-        <GridView orders={filtered} open={open} setOpen={setOpen} />
+        <GridView orders={filtered} open={open} setOpen={setOpen} onAction={onAction} />
       )}
+
+      {active?.kind === "view" && <ViewModal order={active.order} onClose={() => setActive(null)} />}
+      {active?.kind === "refund" && <RefundModal order={active.order} onClose={() => setActive(null)} />}
+      {active?.kind === "edit-details" && <EditDetailsModal order={active.order} onClose={() => setActive(null)} />}
+      {active?.kind === "edit-items" && <EditItemsModal order={active.order} onClose={() => setActive(null)} />}
     </>
   );
 }
+
+type ActionKind = "view" | "print-bill" | "print-kot" | "refund" | "edit-details" | "edit-items";
 
 function StatCard({ tint, iconBg, label, value, sub, icon }: { tint: string; iconBg: string; label: string; value: string; sub?: string; icon: string }) {
   return (
