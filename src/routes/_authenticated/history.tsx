@@ -209,7 +209,7 @@ function StatCard({ tint, iconBg, label, value, sub, icon }: { tint: string; ico
   );
 }
 
-function OrderCard({ o, idx, expanded, onToggle }: { o: OrderRow; idx: number; expanded: boolean; onToggle: () => void }) {
+function OrderCard({ o, idx, expanded, onToggle, onAction }: { o: OrderRow; idx: number; expanded: boolean; onToggle: () => void; onAction: (k: ActionKind, o: OrderRow) => void }) {
   const codeMatch = (o.note ?? "").match(/Code:([A-Z0-9]+)/);
   const code = codeMatch ? codeMatch[1] : o.id.slice(0, 4).toUpperCase();
   const time = new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
@@ -264,28 +264,28 @@ function OrderCard({ o, idx, expanded, onToggle }: { o: OrderRow; idx: number; e
           <div className="inline-flex items-center gap-1 ml-3">Order ID {o.id.slice(0, 8)}… <button onClick={() => copy(o.id)} className="text-[#9CA3AF] hover:text-[#374151]"><Copy className="size-3" /></button></div>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <ActionBtn icon={Eye} label="View" />
-          <ActionBtn icon={Printer} label="Print" tone="#F59E0B" />
-          <ActionBtn icon={RotateCcw} label="Refund" />
-          <ActionBtn icon={Pencil} label="Edit Details" />
-          <button className="h-8 px-3 rounded-lg bg-[#0D9488] text-white text-[12px] font-semibold inline-flex items-center gap-1"><Pencil className="size-3" /> Edit Items</button>
+          <ActionBtn icon={Eye} label="View" onClick={() => onAction("view", o)} />
+          <PrintDropdown onPick={(k) => onAction(k, o)} />
+          <ActionBtn icon={RotateCcw} label="Refund" onClick={() => onAction("refund", o)} />
+          <ActionBtn icon={Pencil} label="Edit Details" onClick={() => onAction("edit-details", o)} />
+          <button onClick={() => onAction("edit-items", o)} className="h-8 px-3 rounded-lg bg-[#0D9488] text-white text-[12px] font-semibold inline-flex items-center gap-1"><Pencil className="size-3" /> Edit Items</button>
         </div>
       </div>
     </div>
   );
 }
 
-function ActionBtn({ icon: Icon, label, tone }: { icon: React.ComponentType<{ className?: string }>; label: string; tone?: string }) {
+function ActionBtn({ icon: Icon, label, tone, onClick }: { icon: React.ComponentType<{ className?: string }>; label: string; tone?: string; onClick?: () => void }) {
   const color = tone ?? "#374151";
   return (
-    <button className="h-8 px-3 rounded-lg border text-[12px] font-semibold inline-flex items-center gap-1 hover:bg-[#F9FAFB]"
+    <button onClick={onClick} className="h-8 px-3 rounded-lg border text-[12px] font-semibold inline-flex items-center gap-1 hover:bg-[#F9FAFB]"
       style={{ borderColor: tone ? `${tone}66` : "#E5E7EB", color }}>
       <Icon className="size-3" /> {label}
     </button>
   );
 }
 
-function GridView({ orders, open, setOpen }: { orders: OrderRow[]; open: Set<string>; setOpen: (fn: (s: Set<string>) => Set<string>) => void }) {
+function GridView({ orders, open, setOpen, onAction }: { orders: OrderRow[]; open: Set<string>; setOpen: (fn: (s: Set<string>) => Set<string>) => void; onAction: (k: ActionKind, o: OrderRow) => void }) {
   if (orders.length === 0) return <Empty label="No orders in this range" />;
   return (
     <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden">
@@ -314,11 +314,11 @@ function GridView({ orders, open, setOpen }: { orders: OrderRow[]; open: Set<str
                   <td className="px-3 py-2"><div className="font-bold">{formatINR(Number(o.total))}</div><div className="text-[11px] text-[#9CA3AF]">+tax {formatINR(Number(o.tax))}</div></td>
                   <td className="px-3 py-2">
                     <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button className="size-7 rounded inline-flex items-center justify-center text-[#F59E0B] hover:bg-[#FEF3C7]"><Printer className="size-3.5" /></button>
-                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Eye className="size-3.5" /></button>
-                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Pencil className="size-3.5" /></button>
-                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Pause className="size-3.5" /></button>
-                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><RotateCcw className="size-3.5" /></button>
+                      <button onClick={() => onAction("print-bill", o)} title="Print Bill" className="size-7 rounded inline-flex items-center justify-center text-[#F59E0B] hover:bg-[#FEF3C7]"><Printer className="size-3.5" /></button>
+                      <button onClick={() => onAction("view", o)} title="View" className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Eye className="size-3.5" /></button>
+                      <button onClick={() => onAction("edit-details", o)} title="Edit details" className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Pencil className="size-3.5" /></button>
+                      <button onClick={() => onAction("edit-items", o)} title="Edit items" className="size-7 rounded inline-flex items-center justify-center text-[#0D9488] hover:bg-[#F0FDFA]"><Pause className="size-3.5" /></button>
+                      <button onClick={() => onAction("refund", o)} title="Refund" className="size-7 rounded inline-flex items-center justify-center text-[#DC2626] hover:bg-[#FEE2E2]"><RotateCcw className="size-3.5" /></button>
                     </div>
                   </td>
                 </tr>
