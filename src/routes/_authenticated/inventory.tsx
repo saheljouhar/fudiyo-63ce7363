@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Package, Sparkles, ClipboardList, Plus, Zap, Trash2, Download,
   Search, BookOpen, UtensilsCrossed, Clock, ShoppingCart, TrendingUp,
-  Recycle, ArrowUpDown, X, CheckCircle2, RefreshCw, Upload,
+  Recycle, ArrowUpDown, X, CheckCircle2, RefreshCw, Upload, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { formatINR } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
   component: InventoryPage,
@@ -13,6 +15,11 @@ export const Route = createFileRoute("/_authenticated/inventory")({
 });
 
 type Tab = "dashboard" | "stock" | "recipes" | "usage" | "procurement" | "ai" | "waste";
+interface Item {
+  id: string; name: string; category: string; quantity: number; unit: string;
+  unit_cost: number; low_stock_threshold: number; supplier: string | null;
+}
+interface Waste { id: string; item_name: string; quantity: number; reason: string; created_at: string }
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "dashboard", label: "Dashboard", icon: <Zap className="size-4" /> },
@@ -24,12 +31,35 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "waste", label: "Waste", icon: <Recycle className="size-4" /> },
 ];
 
+function useInventoryData() {
+  const [items, setItems] = useState<Item[]>([]);
+  const [waste, setWaste] = useState<Waste[]>([]);
+  const [loading, setLoading] = useState(true);
+  const reload = async () => {
+    setLoading(true);
+    const [{ data: it }, { data: w }] = await Promise.all([
+      supabase.from("inventory_items").select("*").order("name"),
+      supabase.from("waste_log").select("*").order("created_at", { ascending: false }).limit(500),
+    ]);
+    if (it) setItems(it as Item[]);
+    if (w) setWaste(w as Waste[]);
+    setLoading(false);
+  };
+  useEffect(() => { void reload(); }, []);
+  return { items, waste, loading, reload };
+}
+
 function InventoryPage() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [importOpen, setImportOpen] = useState(false);
+  const [externalOpen, setExternalOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [wasteOpen, setWasteOpen] = useState(false);
+  const data = useInventoryData();
+
   return (
     <main className="p-6 max-w-[1400px] mx-auto">
-      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
         <div className="flex items-center gap-3">
           <div className="size-12 rounded-xl bg-[#0D9488]/10 inline-flex items-center justify-center">
@@ -44,214 +74,236 @@ function InventoryPage() {
           <button onClick={() => setImportOpen(true)} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
             <Sparkles className="size-4" /> Smart Import
           </button>
-          <button className="h-10 px-4 rounded-md border-2 border-[#0D9488] text-[#0D9488] hover:bg-[#0D9488]/5 text-sm font-semibold inline-flex items-center gap-2 bg-white">
+          <button onClick={() => setExternalOpen(true)} className="h-10 px-4 rounded-md border-2 border-[#0D9488] text-[#0D9488] hover:bg-[#0D9488]/5 text-sm font-semibold inline-flex items-center gap-2 bg-white">
             <ClipboardList className="size-4" /> Log External Order
           </button>
         </div>
       </div>
 
-      {/* Tab bar */}
       <div className="flex flex-wrap gap-1.5 mb-6">
         {TABS.map((t) => {
           const active = tab === t.key;
           return (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`h-10 px-4 rounded-full text-sm font-semibold inline-flex items-center gap-2 transition ${
-                active ? "bg-[#0D9488] text-white" : "bg-white border border-[#E2E8F0] text-[#64748B] hover:bg-gray-50"
-              }`}
-            >
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`h-10 px-4 rounded-full text-sm font-semibold inline-flex items-center gap-2 transition ${active ? "bg-[#0D9488] text-white" : "bg-white border border-[#E2E8F0] text-[#64748B] hover:bg-gray-50"}`}>
               {t.icon} {t.label}
             </button>
           );
         })}
       </div>
 
-      {tab === "dashboard" && <DashboardTab />}
-      {tab === "stock" && <StockTab />}
+      {tab === "dashboard" && <DashboardTab data={data} onAdd={() => setAddOpen(true)} onQuick={() => setQuickOpen(true)} onWaste={() => setWasteOpen(true)} />}
+      {tab === "stock" && <StockTab data={data} onAdd={() => setAddOpen(true)} />}
       {tab === "recipes" && <RecipesTab />}
-      {tab === "usage" && <UsageTab />}
-      {tab === "procurement" && <ProcurementTab />}
-      {tab === "ai" && <AIInsightsTab />}
-      {tab === "waste" && <WasteTab />}
-      {importOpen && <SmartImportModal onClose={() => setImportOpen(false)} />}
+      {tab === "usage" && <UsageTab items={data.items} waste={data.waste} />}
+      {tab === "procurement" && <ProcurementTab items={data.items} onReload={data.reload} />}
+      {tab === "ai" && <AIInsightsTab items={data.items} />}
+      {tab === "waste" && <WasteTab data={data} onLog={() => setWasteOpen(true)} />}
+
+      {importOpen && <SmartImportModal onClose={() => setImportOpen(false)} onDone={data.reload} />}
+      {externalOpen && <ExternalOrderModal onClose={() => setExternalOpen(false)} onDone={data.reload} />}
+      {addOpen && <AddItemModal onClose={() => setAddOpen(false)} onDone={data.reload} />}
+      {quickOpen && <QuickStockModal items={data.items} onClose={() => setQuickOpen(false)} onDone={data.reload} />}
+      {wasteOpen && <LogWasteModal items={data.items} onClose={() => setWasteOpen(false)} onDone={data.reload} />}
     </main>
   );
 }
 
-function DashboardTab() {
+/* ---------- Dashboard ---------- */
+function DashboardTab({ data, onAdd, onQuick, onWaste }: { data: ReturnType<typeof useInventoryData>; onAdd: () => void; onQuick: () => void; onWaste: () => void }) {
+  const { items, waste } = data;
+  const totalValue = items.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_cost), 0);
+  const lowStock = items.filter((i) => Number(i.quantity) <= Number(i.low_stock_threshold));
+  const suppliers = new Set(items.map((i) => i.supplier).filter(Boolean)).size;
+  const wasteThisMonth = waste.filter((w) => new Date(w.created_at).getMonth() === new Date().getMonth() && new Date(w.created_at).getFullYear() === new Date().getFullYear());
+  const wasteValue = wasteThisMonth.reduce((s, w) => {
+    const it = items.find((i) => i.name === w.item_name); return s + Number(w.quantity) * Number(it?.unit_cost ?? 0);
+  }, 0);
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <BigCta color="#16A34A" hover="#15803D" icon={<Plus className="size-5" />} label="Add Item" />
-        <BigCta color="#F59E0B" hover="#D97706" icon={<Zap className="size-5" />} label="Quick Stock" />
-        <BigCta color="#DC2626" hover="#B91C1C" icon={<Trash2 className="size-5" />} label="Log Waste" />
+        <BigCta onClick={onAdd} color="#16A34A" hover="#15803D" icon={<Plus className="size-5" />} label="Add Item" />
+        <BigCta onClick={onQuick} color="#F59E0B" hover="#D97706" icon={<Zap className="size-5" />} label="Quick Stock" />
+        <BigCta onClick={onWaste} color="#DC2626" hover="#B91C1C" icon={<Trash2 className="size-5" />} label="Log Waste" />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <StatCard label="TOTAL ITEMS" value="0" color="#0D9488" icon={<Package className="size-4" />} />
-        <StatCard label="LOW STOCK" value="0" color="#F59E0B" icon={<TrendingUp className="size-4" />} />
-        <StatCard label="TOTAL VALUE" value="₹0" color="#16A34A" icon={<ArrowUpDown className="size-4" />} />
-        <StatCard label="SUPPLIERS" value="0" color="#2563EB" icon={<ShoppingCart className="size-4" />} />
-        <StatCard label="WASTAGE" value="₹0" color="#DC2626" icon={<Recycle className="size-4" />} />
+        <StatCard label="TOTAL ITEMS" value={String(items.length)} color="#0D9488" icon={<Package className="size-4" />} />
+        <StatCard label="LOW STOCK" value={String(lowStock.length)} color="#F59E0B" icon={<TrendingUp className="size-4" />} />
+        <StatCard label="TOTAL VALUE" value={formatINR(totalValue)} color="#16A34A" icon={<ArrowUpDown className="size-4" />} />
+        <StatCard label="SUPPLIERS" value={String(suppliers)} color="#2563EB" icon={<ShoppingCart className="size-4" />} />
+        <StatCard label="WASTAGE" value={formatINR(wasteValue)} color="#DC2626" icon={<Recycle className="size-4" />} />
       </div>
 
       <div className="rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
         <h3 className="text-sm font-bold text-[#111827] mb-3">Low Stock Items</h3>
-        <div className="py-10 text-center">
-          <p className="text-sm text-[#64748B]">All items are well-stocked. Nice work!</p>
-        </div>
+        {lowStock.length === 0 ? (
+          <div className="py-10 text-center"><p className="text-sm text-[#64748B]">All items are well-stocked. Nice work!</p></div>
+        ) : (
+          <div className="divide-y divide-[#F1F5F9]">
+            {lowStock.map((i) => (
+              <div key={i.id} className="py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-lg bg-[#FEF3C7] text-[#F59E0B] inline-flex items-center justify-center"><AlertTriangle className="size-4" /></div>
+                  <div><div className="text-sm font-semibold text-[#111827]">{i.name}</div><div className="text-xs text-[#64748B]">{i.category} · {i.supplier ?? "No supplier"}</div></div>
+                </div>
+                <div className="text-right"><div className="text-sm font-bold text-[#DC2626]">{i.quantity} {i.unit}</div><div className="text-xs text-[#64748B]">min {i.low_stock_threshold}</div></div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function StockTab() {
+/* ---------- Stock ---------- */
+function StockTab({ data, onAdd }: { data: ReturnType<typeof useInventoryData>; onAdd: () => void }) {
+  const { items } = data;
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("all");
+  const [sort, setSort] = useState<"name" | "stock" | "value">("name");
+  const [dir, setDir] = useState<1 | -1>(1);
+  const cats = useMemo(() => Array.from(new Set(items.map((i) => i.category))).sort(), [items]);
+  const totalValue = items.reduce((s, i) => s + Number(i.quantity) * Number(i.unit_cost), 0);
+  const lowStock = items.filter((i) => Number(i.quantity) <= Number(i.low_stock_threshold)).length;
+  let visible = items.filter((i) => (cat === "all" || i.category === cat) && (!q || i.name.toLowerCase().includes(q.toLowerCase())));
+  visible = visible.slice().sort((a, b) => {
+    if (sort === "name") return a.name.localeCompare(b.name) * dir;
+    if (sort === "stock") return (Number(a.quantity) - Number(b.quantity)) * dir;
+    return (Number(a.quantity) * Number(a.unit_cost) - Number(b.quantity) * Number(b.unit_cost)) * dir;
+  });
+  const exportCSV = () => {
+    const rows = [["Name", "Category", "Qty", "Unit", "Unit Cost", "Value", "Supplier"], ...visible.map((i) => [i.name, i.category, String(i.quantity), i.unit, String(i.unit_cost), String(Number(i.quantity) * Number(i.unit_cost)), i.supplier ?? ""])];
+    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "stock.csv"; a.click(); URL.revokeObjectURL(url);
+  };
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="TOTAL ITEMS" value="0" color="#0D9488" icon={<Package className="size-4" />} />
-        <StatCard label="LOW STOCK" value="0" color="#F59E0B" icon={<TrendingUp className="size-4" />} />
-        <StatCard label="VALUE" value="₹0" color="#16A34A" icon={<ArrowUpDown className="size-4" />} />
-        <StatCard label="CATEGORIES" value="0" color="#2563EB" icon={<ClipboardList className="size-4" />} />
+        <StatCard label="TOTAL ITEMS" value={String(items.length)} color="#0D9488" icon={<Package className="size-4" />} />
+        <StatCard label="LOW STOCK" value={String(lowStock)} color="#F59E0B" icon={<TrendingUp className="size-4" />} />
+        <StatCard label="VALUE" value={formatINR(totalValue)} color="#16A34A" icon={<ArrowUpDown className="size-4" />} />
+        <StatCard label="CATEGORIES" value={String(cats.length)} color="#2563EB" icon={<ClipboardList className="size-4" />} />
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#64748B]" />
-          <input placeholder="Search items..." className="w-full h-10 pl-10 pr-3 rounded-md border border-[#E2E8F0] bg-white text-sm" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search items..." className="w-full h-10 pl-10 pr-3 rounded-md border border-[#E2E8F0] bg-white text-sm" />
         </div>
-        <select className="h-10 px-3 rounded-md border border-[#E2E8F0] bg-white text-sm">
-          <option>All Categories</option>
+        <select value={cat} onChange={(e) => setCat(e.target.value)} className="h-10 px-3 rounded-md border border-[#E2E8F0] bg-white text-sm">
+          <option value="all">All Categories</option>{cats.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select className="h-10 px-3 rounded-md border border-[#E2E8F0] bg-white text-sm">
-          <option>Name</option><option>Stock</option><option>Value</option>
+        <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="h-10 px-3 rounded-md border border-[#E2E8F0] bg-white text-sm">
+          <option value="name">Name</option><option value="stock">Stock</option><option value="value">Value</option>
         </select>
-        <button className="size-10 rounded-md border border-[#E2E8F0] bg-white inline-flex items-center justify-center text-[#64748B] hover:bg-gray-50">
-          <ArrowUpDown className="size-4" />
-        </button>
-        <button className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
-          <Plus className="size-4" /> Add Item
-        </button>
-        <button className="h-10 px-4 rounded-md border-2 border-[#0D9488] text-[#0D9488] bg-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-[#0D9488]/5">
-          <Download className="size-4" /> Export PDF
-        </button>
+        <button onClick={() => setDir((d) => (d === 1 ? -1 : 1))} className="size-10 rounded-md border border-[#E2E8F0] bg-white inline-flex items-center justify-center text-[#64748B] hover:bg-gray-50"><ArrowUpDown className="size-4" /></button>
+        <button onClick={onAdd} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2"><Plus className="size-4" /> Add Item</button>
+        <button onClick={exportCSV} className="h-10 px-4 rounded-md border-2 border-[#0D9488] text-[#0D9488] bg-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-[#0D9488]/5"><Download className="size-4" /> Export CSV</button>
       </div>
 
-      <div className="rounded-2xl border border-[#E2E8F0] bg-white p-12 text-center shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
-        <Package className="size-12 text-[#94A3B8] mx-auto mb-3" strokeWidth={1.5} />
-        <h3 className="text-base font-semibold text-[#111827] mb-1">No inventory items found</h3>
-        <p className="text-sm text-[#64748B] mb-5">Get started by adding your first inventory item.</p>
-        <button className="h-11 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
-          <Plus className="size-4" /> Add Your First Item
-        </button>
-      </div>
+      {visible.length === 0 ? (
+        <div className="rounded-2xl border border-[#E2E8F0] bg-white p-12 text-center shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+          <Package className="size-12 text-[#94A3B8] mx-auto mb-3" strokeWidth={1.5} />
+          <h3 className="text-base font-semibold text-[#111827] mb-1">No inventory items found</h3>
+          <p className="text-sm text-[#64748B] mb-5">Get started by adding your first inventory item.</p>
+          <button onClick={onAdd} className="h-11 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2"><Plus className="size-4" /> Add Your First Item</button>
+        </div>
+      ) : (
+        <div className="bg-white border border-[#E2E8F0] rounded-2xl overflow-hidden">
+          <table className="w-full text-[13px]">
+            <thead className="bg-[#F9FAFB] text-[11px] uppercase text-[#6B7280]"><tr>
+              <th className="text-left px-3 py-2">Name</th><th className="text-left px-3 py-2">Category</th><th className="text-right px-3 py-2">Qty</th><th className="text-right px-3 py-2">Unit Cost</th><th className="text-right px-3 py-2">Value</th><th className="text-left px-3 py-2">Supplier</th><th className="text-right px-3 py-2">Status</th>
+            </tr></thead>
+            <tbody>
+              {visible.map((i) => {
+                const low = Number(i.quantity) <= Number(i.low_stock_threshold);
+                return (
+                  <tr key={i.id} className="border-t border-[#F1F5F9]">
+                    <td className="px-3 py-2 font-semibold">{i.name}</td>
+                    <td className="px-3 py-2">{i.category}</td>
+                    <td className="px-3 py-2 text-right">{i.quantity} {i.unit}</td>
+                    <td className="px-3 py-2 text-right">{formatINR(Number(i.unit_cost))}</td>
+                    <td className="px-3 py-2 text-right">{formatINR(Number(i.quantity) * Number(i.unit_cost))}</td>
+                    <td className="px-3 py-2">{i.supplier ?? "—"}</td>
+                    <td className="px-3 py-2 text-right">{low ? <span className="text-[11px] font-bold text-[#F59E0B] bg-[#FEF3C7] px-2 py-0.5 rounded-full">LOW</span> : <span className="text-[11px] font-bold text-[#16A34A] bg-[#DCFCE7] px-2 py-0.5 rounded-full">OK</span>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
+/* ---------- Recipes / Usage / AI / Waste / Procurement ---------- */
 function RecipesTab() {
-  const [addOpen, setAddOpen] = useState(false);
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-bold text-[#111827]">Recipes</h3>
-          <p className="text-xs text-[#64748B]">0 of 0 recipes</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setAddOpen(true)} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
-            <Plus className="size-4" /> Add Recipe
-          </button>
-          <button className="h-10 px-4 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-sm font-semibold inline-flex items-center gap-2">
-            <ClipboardList className="size-4" /> Bulk Import
-          </button>
-          <button className="h-10 px-4 rounded-md border-2 border-[#0D9488] text-[#0D9488] bg-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-[#0D9488]/5">
-            <Download className="size-4" /> Export PDF
-          </button>
-        </div>
-      </div>
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#64748B]" />
-        <input placeholder="Search recipes..." className="w-full h-10 pl-10 pr-3 rounded-md border border-[#E2E8F0] bg-white text-sm" />
-      </div>
-
-      <div className="rounded-2xl border border-[#E2E8F0] bg-white p-12 text-center shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
-        <UtensilsCrossed className="size-12 text-[#94A3B8] mx-auto mb-3" strokeWidth={1.5} />
-        <h3 className="text-base font-semibold text-[#111827] mb-1">No recipes yet</h3>
-        <p className="text-sm text-[#64748B] mb-5">Create your first recipe to track ingredient costs.</p>
-        <button onClick={() => setAddOpen(true)} className="h-11 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-2">
-          <Plus className="size-4" /> Add Recipe
-        </button>
-      </div>
-      {addOpen && <AddRecipeModal onClose={() => setAddOpen(false)} />}
+    <div className="rounded-2xl border border-[#E2E8F0] bg-white p-12 text-center shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+      <UtensilsCrossed className="size-12 text-[#94A3B8] mx-auto mb-3" strokeWidth={1.5} />
+      <h3 className="text-base font-semibold text-[#111827] mb-1">Recipes</h3>
+      <p className="text-sm text-[#64748B]">Recipe management is coming soon.</p>
     </div>
   );
 }
 
-function ComingSoon({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
-  return (
-    <div className="rounded-2xl border border-[#E2E8F0] bg-white p-14 text-center shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
-      <div className="size-16 rounded-2xl bg-[#0D9488]/10 inline-flex items-center justify-center mb-4">{icon}</div>
-      <h3 className="text-lg font-bold text-[#111827] mb-1">{title}</h3>
-      <p className="text-sm text-[#64748B] max-w-md mx-auto">{subtitle}</p>
-      <p className="text-xs text-[#94A3B8] mt-3">Coming soon</p>
-    </div>
-  );
-}
-
-function BigCta({ color, hover, icon, label }: { color: string; hover: string; icon: React.ReactNode; label: string }) {
-  return (
-    <button
-      className="h-20 rounded-2xl text-white text-lg font-bold inline-flex items-center justify-center gap-3 shadow-sm transition"
-      style={{ backgroundColor: color }}
-      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = hover)}
-      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = color)}
-    >
-      {icon} {label}
-    </button>
-  );
-}
-
-function StatCard({ label, value, color, icon }: { label: string; value: string; color: string; icon: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
-      <div className="flex items-start justify-between">
-        <div className="text-[10px] font-bold tracking-wider text-[#64748B]">{label}</div>
-        <div className="size-7 rounded-md inline-flex items-center justify-center" style={{ backgroundColor: `${color}1A`, color }}>
-          {icon}
-        </div>
-      </div>
-      <div className="text-2xl font-bold text-[#111827] mt-2 tabular-nums">{value}</div>
-    </div>
-  );
-}
-
-
-function UsageTab() {
-  const [period, setPeriod] = useState<"today" | "7d" | "30d" | "custom">("today");
-  const opts: [typeof period, string][] = [["today", "Today"], ["7d", "7 Days"], ["30d", "30 Days"], ["custom", "Custom"]];
+function UsageTab({ items, waste }: { items: Item[]; waste: Waste[] }) {
+  const [period, setPeriod] = useState<"today" | "7d" | "30d">("today");
+  const cutoff = period === "today" ? new Date().setHours(0, 0, 0, 0) : Date.now() - (period === "7d" ? 7 : 30) * 86400000;
+  const relevant = waste.filter((w) => new Date(w.created_at).getTime() >= cutoff);
+  const byItem: Record<string, number> = {};
+  relevant.forEach((w) => { byItem[w.item_name] = (byItem[w.item_name] ?? 0) + Number(w.quantity); });
+  const ranked = Object.entries(byItem).sort((a, b) => b[1] - a[1]).slice(0, 10);
   return (
     <div className="space-y-5">
       <div className="flex gap-2 flex-wrap">
-        {opts.map(([k, l]) => (
-          <button key={k} onClick={() => setPeriod(k)}
-            className={`h-9 px-4 rounded-full text-sm font-semibold ${period === k ? "bg-[#0D9488] text-white" : "bg-white border border-[#E2E8F0] text-[#64748B]"}`}>{l}</button>
+        {(["today", "7d", "30d"] as const).map((k) => (
+          <button key={k} onClick={() => setPeriod(k)} className={`h-9 px-4 rounded-full text-sm font-semibold ${period === k ? "bg-[#0D9488] text-white" : "bg-white border border-[#E2E8F0] text-[#64748B]"}`}>{k === "today" ? "Today" : k === "7d" ? "7 Days" : "30 Days"}</button>
         ))}
       </div>
-      <div className="rounded-2xl border border-[#E2E8F0] bg-white p-14 text-center">
-        <div className="size-16 rounded-2xl bg-[#0D9488]/10 inline-flex items-center justify-center mb-3"><Clock className="size-8 text-[#0D9488]" /></div>
-        <h3 className="text-lg font-bold mb-1">No usage data yet</h3>
-        <p className="text-sm text-[#64748B] max-w-md mx-auto">Usage data will appear here as inventory is consumed through orders, recipes, and manual adjustments.</p>
-      </div>
+      {ranked.length === 0 ? (
+        <div className="rounded-2xl border border-[#E2E8F0] bg-white p-14 text-center">
+          <Clock className="size-8 text-[#0D9488] mx-auto mb-3" />
+          <h3 className="text-lg font-bold mb-1">No usage data</h3>
+          <p className="text-sm text-[#64748B]">Usage will appear here as inventory is consumed.</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-4">
+          <div className="text-sm font-bold mb-3">Top consumed / wasted items</div>
+          {ranked.map(([name, qty]) => {
+            const it = items.find((i) => i.name === name);
+            const max = ranked[0][1];
+            return (
+              <div key={name} className="mb-2">
+                <div className="flex justify-between text-[13px]"><span>{name}</span><span className="font-semibold">{qty} {it?.unit ?? ""}</span></div>
+                <div className="h-2 rounded-full bg-[#F1F5F9] mt-1 overflow-hidden"><div className="h-full bg-[#0D9488]" style={{ width: `${(qty / max) * 100}%` }} /></div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function ProcurementTab() {
+function ProcurementTab({ items, onReload }: { items: Item[]; onReload: () => void }) {
   const subs = ["Suppliers", "Purchase Orders", "Requisitions", "Goods Receipt", "Invoices", "Returns", "Transfers"];
   const [sub, setSub] = useState("Suppliers");
+  const [addOpen, setAddOpen] = useState(false);
+  const suppliers = useMemo(() => {
+    const map: Record<string, { count: number; value: number }> = {};
+    for (const i of items) {
+      const key = i.supplier || "Unassigned";
+      if (!map[key]) map[key] = { count: 0, value: 0 };
+      map[key].count += 1;
+      map[key].value += Number(i.quantity) * Number(i.unit_cost);
+    }
+    return Object.entries(map);
+  }, [items]);
   return (
     <div className="space-y-5">
       <div className="flex gap-1 flex-wrap border-b border-[#E2E8F0]">
@@ -261,145 +313,407 @@ function ProcurementTab() {
       </div>
       <div className="flex justify-between items-center">
         <h3 className="text-base font-semibold">{sub}</h3>
-        <button className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-1.5">
-          <Plus className="size-4" /> Add {sub.replace(/s$/, "")}
-        </button>
+        {sub === "Suppliers" && <button onClick={() => setAddOpen(true)} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-1.5"><Plus className="size-4" /> Add Supplier</button>}
       </div>
-      <div className="rounded-2xl border border-[#E2E8F0] bg-white p-12 text-center text-sm text-[#64748B]">
-        No {sub.toLowerCase()} added yet.
-      </div>
+      {sub === "Suppliers" ? (
+        suppliers.length === 0 ? (
+          <div className="rounded-2xl border border-[#E2E8F0] bg-white p-12 text-center text-sm text-[#64748B]">No suppliers yet.</div>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-3">
+            {suppliers.map(([name, s]) => (
+              <div key={name} className="bg-white border border-[#E2E8F0] rounded-xl p-4">
+                <div className="text-sm font-bold text-[#111827]">{name}</div>
+                <div className="text-xs text-[#64748B] mt-1">{s.count} items · {formatINR(s.value)}</div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        <div className="rounded-2xl border border-[#E2E8F0] bg-white p-12 text-center text-sm text-[#64748B]">{sub} coming soon.</div>
+      )}
+      {addOpen && <AddSupplierModal items={items} onClose={() => setAddOpen(false)} onDone={onReload} />}
     </div>
   );
 }
 
-function AIInsightsTab() {
+function AIInsightsTab({ items }: { items: Item[] }) {
+  const lowStock = items.filter((i) => Number(i.quantity) <= Number(i.low_stock_threshold));
+  const estLoss = lowStock.reduce((s, i) => s + Number(i.unit_cost) * Math.max(0, Number(i.low_stock_threshold) - Number(i.quantity)), 0);
+  const critical = lowStock.filter((i) => Number(i.quantity) === 0).length;
   return (
     <div className="space-y-5">
       <div className="rounded-2xl p-6 flex flex-wrap items-center justify-between gap-4" style={{ background: "linear-gradient(90deg,#0D9488,#3B82F6)" }}>
         <div className="text-white">
           <h3 className="text-lg font-bold">AI Inventory Insights</h3>
-          <p className="text-sm opacity-90 mt-1">0 items at risk with an estimated loss of ₹0.00. 0 reorder suggestions available.</p>
+          <p className="text-sm opacity-90 mt-1">{lowStock.length} items at risk with an estimated loss of {formatINR(estLoss)}. {lowStock.length} reorder suggestions available.</p>
         </div>
         <div className="bg-white rounded-xl px-5 py-3 text-center">
           <div className="text-xs font-bold text-[#64748B]">ACTION ITEMS</div>
-          <div className="text-3xl font-bold text-[#111827]">0</div>
+          <div className="text-3xl font-bold text-[#111827]">{lowStock.length}</div>
         </div>
       </div>
       <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5">
-        <h4 className="text-sm font-bold mb-3">Reorder Suggestions <span className="text-gray-400">[0]</span></h4>
-        <p className="text-sm text-gray-500 py-4 text-center">No suggestions right now.</p>
+        <h4 className="text-sm font-bold mb-3">Reorder Suggestions <span className="text-gray-400">[{lowStock.length}]</span></h4>
+        {lowStock.length === 0 ? <p className="text-sm text-gray-500 py-4 text-center">No suggestions right now.</p> : (
+          <div className="space-y-2">
+            {lowStock.map((i) => {
+              const suggested = Math.max(Number(i.low_stock_threshold) * 2, Number(i.low_stock_threshold) + 5);
+              const cost = suggested * Number(i.unit_cost);
+              return (
+                <div key={i.id} className="flex items-center justify-between border border-[#F1F5F9] rounded-lg p-3">
+                  <div>
+                    <div className="text-sm font-semibold text-[#111827]">{i.name}</div>
+                    <div className="text-xs text-[#64748B]">Current: {i.quantity} {i.unit} · Reorder to {suggested} {i.unit}</div>
+                  </div>
+                  <div className="text-right"><div className="text-sm font-bold">{formatINR(cost)}</div><div className="text-xs text-[#64748B]">{i.supplier ?? "No supplier"}</div></div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5">
         <h4 className="text-sm font-bold mb-3">Waste Predictions</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <StatCard label="ITEMS AT RISK" value="0" color="#F59E0B" icon={<TrendingUp className="size-4" />} />
-          <StatCard label="ESTIMATED LOSS" value="₹0.00" color="#DC2626" icon={<TrendingUp className="size-4" />} />
-          <StatCard label="CRITICAL RISK" value="0" color="#DC2626" icon={<TrendingUp className="size-4" />} />
+          <StatCard label="ITEMS AT RISK" value={String(lowStock.length)} color="#F59E0B" icon={<TrendingUp className="size-4" />} />
+          <StatCard label="ESTIMATED LOSS" value={formatINR(estLoss)} color="#DC2626" icon={<TrendingUp className="size-4" />} />
+          <StatCard label="CRITICAL (OUT)" value={String(critical)} color="#DC2626" icon={<TrendingUp className="size-4" />} />
         </div>
       </div>
     </div>
   );
 }
 
-function WasteTab() {
+function WasteTab({ data, onLog }: { data: ReturnType<typeof useInventoryData>; onLog: () => void }) {
+  const { waste, items, reload } = data;
+  const now = Date.now();
+  const startOfDay = new Date().setHours(0, 0, 0, 0);
+  const startOfWeek = now - 7 * 86400000;
+  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+  const valueOf = (w: Waste) => Number(w.quantity) * Number(items.find((i) => i.name === w.item_name)?.unit_cost ?? 0);
+  const today = waste.filter((w) => new Date(w.created_at).getTime() >= startOfDay);
+  const week = waste.filter((w) => new Date(w.created_at).getTime() >= startOfWeek);
+  const month = waste.filter((w) => new Date(w.created_at).getTime() >= startOfMonth);
+  const top: Record<string, number> = {};
+  month.forEach((w) => { top[w.item_name] = (top[w.item_name] ?? 0) + valueOf(w); });
+  const topName = Object.entries(top).sort((a, b) => b[1] - a[1])[0];
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[["TODAY", "#0D9488"], ["THIS WEEK", "#2563EB"], ["THIS MONTH", "#F59E0B"], ["TOP WASTED", "#DC2626"]].map(([l, c]) => (
-          <div key={l} className="rounded-2xl border border-[#E2E8F0] bg-white p-4">
-            <div className="text-[10px] font-bold tracking-wider" style={{ color: c }}>{l}</div>
-            <div className="text-2xl font-bold mt-1">₹0.00</div>
-            <div className="text-xs text-gray-500">0 entries</div>
+        {[
+          ["TODAY", "#0D9488", today.reduce((s, w) => s + valueOf(w), 0), today.length],
+          ["THIS WEEK", "#2563EB", week.reduce((s, w) => s + valueOf(w), 0), week.length],
+          ["THIS MONTH", "#F59E0B", month.reduce((s, w) => s + valueOf(w), 0), month.length],
+          ["TOP WASTED", "#DC2626", topName?.[1] ?? 0, 0],
+        ].map(([l, c, v, n], idx) => (
+          <div key={l as string} className="rounded-2xl border border-[#E2E8F0] bg-white p-4">
+            <div className="text-[10px] font-bold tracking-wider" style={{ color: c as string }}>{l as string}</div>
+            <div className="text-2xl font-bold mt-1">{formatINR(v as number)}</div>
+            <div className="text-xs text-gray-500">{idx === 3 ? (topName?.[0] ?? "—") : `${n as number} entries`}</div>
           </div>
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <button className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-1.5"><Plus className="size-4" /> Log Waste</button>
-        <button className="h-10 px-4 rounded-md bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-sm font-semibold inline-flex items-center gap-1.5"><Sparkles className="size-4" /> AI Leftover</button>
-        <button className="h-10 px-4 rounded-md border bg-white text-sm font-semibold inline-flex items-center gap-1.5"><RefreshCw className="size-4" /> Refresh</button>
-        <div className="ml-auto flex items-center gap-2">
-          <select className="h-10 px-3 rounded-md border text-sm"><option>7 Days</option><option>30 Days</option></select>
-          <select className="h-10 px-3 rounded-md border text-sm"><option>All Reasons</option></select>
-          <button className="h-10 px-4 rounded-md border-2 border-[#0D9488] text-[#0D9488] bg-white text-sm font-semibold inline-flex items-center gap-1.5"><Download className="size-4" /> Export PDF</button>
+        <button onClick={onLog} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold inline-flex items-center gap-1.5"><Plus className="size-4" /> Log Waste</button>
+        <button onClick={reload} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold inline-flex items-center gap-1.5"><RefreshCw className="size-4" /> Refresh</button>
+      </div>
+      {waste.length === 0 ? (
+        <div className="rounded-2xl border border-[#E2E8F0] bg-white p-12 text-center">
+          <CheckCircle2 className="size-12 text-[#16A34A] mx-auto mb-3" />
+          <h3 className="text-base font-bold mb-1">No waste entries</h3>
+          <p className="text-sm text-gray-500">Less waste = more profit.</p>
         </div>
-      </div>
-      <div className="rounded-2xl border border-[#E2E8F0] bg-white p-12 text-center">
-        <CheckCircle2 className="size-12 text-[#16A34A] mx-auto mb-3" />
-        <h3 className="text-base font-bold mb-1">No waste entries</h3>
-        <p className="text-sm text-gray-500">Less waste = more profit.</p>
-      </div>
+      ) : (
+        <div className="bg-white border border-[#E2E8F0] rounded-2xl overflow-hidden">
+          <table className="w-full text-[13px]">
+            <thead className="bg-[#F9FAFB] text-[11px] uppercase text-[#6B7280]"><tr>
+              <th className="text-left px-3 py-2">Item</th><th className="text-right px-3 py-2">Qty</th><th className="text-left px-3 py-2">Reason</th><th className="text-right px-3 py-2">Value</th><th className="text-left px-3 py-2">When</th>
+            </tr></thead>
+            <tbody>
+              {waste.slice(0, 100).map((w) => (
+                <tr key={w.id} className="border-t border-[#F1F5F9]">
+                  <td className="px-3 py-2 font-semibold">{w.item_name}</td>
+                  <td className="px-3 py-2 text-right">{w.quantity}</td>
+                  <td className="px-3 py-2">{w.reason}</td>
+                  <td className="px-3 py-2 text-right">{formatINR(valueOf(w))}</td>
+                  <td className="px-3 py-2 text-[#64748B]">{new Date(w.created_at).toLocaleString("en-IN")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
-function SmartImportModal({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<"paste" | "invoice" | "file">("paste");
+/* ---------- Shared ---------- */
+function BigCta({ color, hover, icon, label, onClick }: { color: string; hover: string; icon: React.ReactNode; label: string; onClick?: () => void }) {
+  return (
+    <button onClick={onClick} className="h-20 rounded-2xl text-white text-lg font-bold inline-flex items-center justify-center gap-3 shadow-sm transition" style={{ backgroundColor: color }} onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = hover)} onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = color)}>
+      {icon} {label}
+    </button>
+  );
+}
+function StatCard({ label, value, color, icon }: { label: string; value: string; color: string; icon: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+      <div className="flex items-start justify-between">
+        <div className="text-[10px] font-bold tracking-wider text-[#64748B]">{label}</div>
+        <div className="size-7 rounded-md inline-flex items-center justify-center" style={{ backgroundColor: `${color}1A`, color }}>{icon}</div>
+      </div>
+      <div className="text-2xl font-bold text-[#111827] mt-2 tabular-nums">{value}</div>
+    </div>
+  );
+}
+function Modal({ title, onClose, children, width = "max-w-lg" }: { title: string; onClose: () => void; children: React.ReactNode; width?: string }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b flex items-center justify-between">
-          <h2 className="text-base font-bold">Smart Import</h2>
-          <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
-        </div>
-        <div className="flex border-b">
-          {(["paste", "invoice", "file"] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={`flex-1 h-11 text-sm font-semibold capitalize ${tab === t ? "border-b-2 border-[#0D9488] text-[#0D9488]" : "text-gray-500"}`}>
-              {t === "paste" ? "Paste Text" : t === "invoice" ? "Upload Invoice" : "Upload File"}
-            </button>
-          ))}
-        </div>
-        <div className="p-6">
-          {tab === "paste" && <textarea className="w-full min-h-[180px] p-3 border rounded-md text-sm" placeholder="Paste inventory list..." />}
-          {tab === "invoice" && <div className="border-2 border-dashed rounded-xl p-10 text-center"><Upload className="size-10 mx-auto text-gray-400 mb-3" /><p className="text-sm">Upload invoice (PDF/JPG/PNG)</p></div>}
-          {tab === "file" && (
-            <div className="border-2 border-dashed rounded-xl p-10 text-center">
-              <Upload className="size-10 mx-auto text-gray-400 mb-3" />
-              <p className="text-sm font-semibold">Drop file here or click to upload</p>
-              <p className="text-xs text-gray-500 mt-1">Supported: CSV, XLSX, XLS</p>
-            </div>
-          )}
-        </div>
-        <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-2">
-          <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
-          <button onClick={() => { toast.success("Import queued"); onClose(); }} className="h-10 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold">Upload & Parse</button>
-        </div>
+      <div className={`bg-white rounded-xl shadow-2xl w-full ${width} max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-3 border-b flex items-center justify-between"><h2 className="text-base font-bold">{title}</h2><button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button></div>
+        <div>{children}</div>
       </div>
     </div>
   );
 }
+function Fld({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><div className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">{label}</div>{children}</div>;
+}
 
-function AddRecipeModal({ onClose }: { onClose: () => void }) {
-  const [name, setName] = useState("");
-  const [servings, setServings] = useState(1);
+/* ---------- Modals ---------- */
+function AddItemModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [tab, setTab] = useState<"manual" | "scan" | "paste">("manual");
+  const [name, setName] = useState(""); const [category, setCategory] = useState("Ingredient");
+  const [qty, setQty] = useState(0); const [unit, setUnit] = useState("kg");
+  const [cost, setCost] = useState(0); const [threshold, setThreshold] = useState(5);
+  const [supplier, setSupplier] = useState(""); const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (!name) return toast.error("Name required");
+    setSaving(true);
+    const { error } = await supabase.from("inventory_items").insert({ name, category, quantity: qty, unit, unit_cost: cost, low_stock_threshold: threshold, supplier: supplier || null } as never);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("Item added"); onDone(); onClose();
+  };
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-[#16A34A] text-white px-5 py-4 flex items-center justify-between">
-          <h2 className="text-base font-bold">Add Recipe</h2>
-          <button onClick={onClose} className="size-8 rounded hover:bg-white/10 inline-flex items-center justify-center"><X className="size-4" /></button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="rounded-lg border border-[#0D9488]/30 bg-[#0D9488]/5 p-4">
-            <h4 className="text-sm font-bold text-[#0D9488] mb-2 inline-flex items-center gap-1.5"><Sparkles className="size-4" /> AI Recipe Generator</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-              <input placeholder="Recipe Name" value={name} onChange={(e) => setName(e.target.value)} className="h-10 px-3 rounded-md border text-sm" />
-              <input type="number" placeholder="Servings" value={servings} onChange={(e) => setServings(Number(e.target.value))} className="h-10 px-3 rounded-md border text-sm" />
-            </div>
-            <button disabled={!name} className="w-full h-10 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">Generate with AI</button>
-          </div>
-          <textarea placeholder="Description" className="w-full min-h-[70px] p-3 border rounded-md text-sm" />
+    <Modal title="Add Inventory Item" onClose={onClose}>
+      <div className="flex border-b">
+        {(["manual", "scan", "paste"] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)} className={`flex-1 h-11 text-sm font-semibold capitalize ${tab === t ? "border-b-2 border-[#0D9488] text-[#0D9488]" : "text-gray-500"}`}>{t === "scan" ? "Scan Invoice" : t === "paste" ? "Paste Text" : "Manual"}</button>
+        ))}
+      </div>
+      <div className="p-5 space-y-3">
+        {tab === "manual" && (<>
+          <Fld label="Name"><input value={name} onChange={(e) => setName(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
           <div className="grid grid-cols-2 gap-3">
-            <input placeholder="Category" className="h-10 px-3 rounded-md border text-sm" />
-            <input type="number" placeholder="Servings" className="h-10 px-3 rounded-md border text-sm" />
-            <input type="number" placeholder="Prep Time (min)" className="h-10 px-3 rounded-md border text-sm" />
-            <input type="number" placeholder="Cook Time (min)" className="h-10 px-3 rounded-md border text-sm" />
+            <Fld label="Category"><input value={category} onChange={(e) => setCategory(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+            <Fld label="Supplier"><input value={supplier} onChange={(e) => setSupplier(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
           </div>
-        </div>
-        <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-2">
-          <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
-          <button onClick={() => { toast.success("Recipe created"); onClose(); }} className="h-10 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold">Create Recipe</button>
+          <div className="grid grid-cols-3 gap-3">
+            <Fld label="Quantity"><input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+            <Fld label="Unit"><select value={unit} onChange={(e) => setUnit(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm">{["kg", "g", "l", "ml", "pcs", "box"].map((u) => <option key={u}>{u}</option>)}</select></Fld>
+            <Fld label="Unit Cost (₹)"><input type="number" value={cost} onChange={(e) => setCost(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+          </div>
+          <Fld label="Low Stock Threshold"><input type="number" value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+        </>)}
+        {tab === "scan" && <div className="border-2 border-dashed rounded-xl p-10 text-center"><Upload className="size-10 mx-auto text-gray-400 mb-3" /><p className="text-sm">Upload invoice PDF/JPG (coming soon)</p></div>}
+        {tab === "paste" && <textarea placeholder="Paste inventory list, one per line: Name, Qty, Unit, Cost" className="w-full min-h-[180px] p-3 border rounded-md text-sm" />}
+      </div>
+      <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
+        <button disabled={saving} onClick={save} className="h-10 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">Save Item</button>
+      </div>
+    </Modal>
+  );
+}
+
+function QuickStockModal({ items, onClose, onDone }: { items: Item[]; onClose: () => void; onDone: () => void }) {
+  const [itemId, setItemId] = useState(items[0]?.id ?? "");
+  const [delta, setDelta] = useState(1); const [op, setOp] = useState<"add" | "deduct">("add");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    const it = items.find((i) => i.id === itemId); if (!it) return toast.error("Pick item");
+    setSaving(true);
+    const newQty = op === "add" ? Number(it.quantity) + delta : Math.max(0, Number(it.quantity) - delta);
+    const { error } = await supabase.from("inventory_items").update({ quantity: newQty } as never).eq("id", it.id);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success(`${it.name} updated to ${newQty} ${it.unit}`); onDone(); onClose();
+  };
+  return (
+    <Modal title="Quick Stock Adjustment" onClose={onClose}>
+      <div className="p-5 space-y-3">
+        <Fld label="Item"><select value={itemId} onChange={(e) => setItemId(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm">{items.map((i) => <option key={i.id} value={i.id}>{i.name} ({i.quantity} {i.unit})</option>)}</select></Fld>
+        <div className="grid grid-cols-2 gap-3">
+          <Fld label="Operation"><div className="flex gap-1 p-1 bg-[#F1F5F9] rounded-lg">
+            {(["add", "deduct"] as const).map((o) => (
+              <button key={o} onClick={() => setOp(o)} className={`flex-1 h-9 rounded-md text-sm font-semibold capitalize ${op === o ? "bg-white shadow" : "text-[#64748B]"}`}>{o}</button>
+            ))}
+          </div></Fld>
+          <Fld label="Amount"><input type="number" value={delta} onChange={(e) => setDelta(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
         </div>
       </div>
-    </div>
+      <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
+        <button disabled={saving || !itemId} onClick={save} className="h-10 px-5 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold disabled:opacity-50">Apply</button>
+      </div>
+    </Modal>
+  );
+}
+
+function LogWasteModal({ items, onClose, onDone }: { items: Item[]; onClose: () => void; onDone: () => void }) {
+  const [itemId, setItemId] = useState(items[0]?.id ?? "");
+  const [qty, setQty] = useState(1); const [reason, setReason] = useState("Expired");
+  const [saving, setSaving] = useState(false);
+  const reasons = ["Expired", "Spoiled", "Overcooked", "Dropped", "Customer return", "Other"];
+  const save = async () => {
+    const it = items.find((i) => i.id === itemId); if (!it) return toast.error("Pick item");
+    setSaving(true);
+    const [{ error: wErr }, { error: iErr }] = await Promise.all([
+      supabase.from("waste_log").insert({ item_id: it.id, item_name: it.name, quantity: qty, reason } as never),
+      supabase.from("inventory_items").update({ quantity: Math.max(0, Number(it.quantity) - qty) } as never).eq("id", it.id),
+    ]);
+    setSaving(false);
+    if (wErr || iErr) return toast.error((wErr ?? iErr)!.message);
+    toast.success("Waste logged"); onDone(); onClose();
+  };
+  return (
+    <Modal title="Log Waste" onClose={onClose}>
+      <div className="p-5 space-y-3">
+        <Fld label="Item"><select value={itemId} onChange={(e) => setItemId(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm">{items.map((i) => <option key={i.id} value={i.id}>{i.name} ({i.quantity} {i.unit})</option>)}</select></Fld>
+        <Fld label="Quantity Wasted"><input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+        <Fld label="Reason"><div className="flex flex-wrap gap-1.5">{reasons.map((r) => (
+          <button key={r} onClick={() => setReason(r)} className={`h-8 px-3 rounded-full text-[12px] font-semibold border ${reason === r ? "bg-[#DC2626] text-white border-[#DC2626]" : "bg-white border-[#E5E7EB]"}`}>{r}</button>
+        ))}</div></Fld>
+      </div>
+      <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
+        <button disabled={saving || !itemId} onClick={save} className="h-10 px-5 rounded-md bg-[#DC2626] hover:bg-[#B91C1C] text-white text-sm font-semibold disabled:opacity-50">Log Waste</button>
+      </div>
+    </Modal>
+  );
+}
+
+function SmartImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [tab, setTab] = useState<"paste" | "invoice" | "file">("paste");
+  const [text, setText] = useState(""); const [saving, setSaving] = useState(false);
+  const parseAndSave = async () => {
+    const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) return toast.error("Paste some items");
+    setSaving(true);
+    const rows = lines.map((line) => {
+      const [name, qty, unit = "pcs", cost = "0"] = line.split(/[,;\t]/).map((s) => s.trim());
+      return { name, quantity: Number(qty) || 0, unit, unit_cost: Number(cost) || 0 };
+    }).filter((r) => r.name);
+    const { error } = await supabase.from("inventory_items").insert(rows as never);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success(`Imported ${rows.length} items`); onDone(); onClose();
+  };
+  return (
+    <Modal title="Smart Import" onClose={onClose} width="max-w-2xl">
+      <div className="flex border-b">
+        {(["paste", "invoice", "file"] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)} className={`flex-1 h-11 text-sm font-semibold capitalize ${tab === t ? "border-b-2 border-[#0D9488] text-[#0D9488]" : "text-gray-500"}`}>
+            {t === "paste" ? "Paste Text" : t === "invoice" ? "Upload Invoice" : "Upload File"}
+          </button>
+        ))}
+      </div>
+      <div className="p-5">
+        {tab === "paste" && (<>
+          <p className="text-xs text-[#64748B] mb-2">Format per line: Name, Qty, Unit, Cost</p>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} className="w-full min-h-[180px] p-3 border rounded-md text-sm font-mono" placeholder="Tomato, 10, kg, 40&#10;Rice, 25, kg, 65" />
+        </>)}
+        {tab === "invoice" && <div className="border-2 border-dashed rounded-xl p-10 text-center"><Upload className="size-10 mx-auto text-gray-400 mb-3" /><p className="text-sm">Upload invoice (PDF/JPG/PNG) — OCR coming soon</p></div>}
+        {tab === "file" && <div className="border-2 border-dashed rounded-xl p-10 text-center"><Upload className="size-10 mx-auto text-gray-400 mb-3" /><p className="text-sm">Drop CSV/XLSX here — coming soon</p></div>}
+      </div>
+      <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
+        <button disabled={saving || tab !== "paste"} onClick={parseAndSave} className="h-10 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">Import</button>
+      </div>
+    </Modal>
+  );
+}
+
+function ExternalOrderModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [tab, setTab] = useState<"manual" | "paste" | "photo">("manual");
+  const [name, setName] = useState(""); const [qty, setQty] = useState(0); const [unit, setUnit] = useState("kg"); const [cost, setCost] = useState(0); const [supplier, setSupplier] = useState("");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (!name) return toast.error("Name required");
+    setSaving(true);
+    const { data: existing } = await supabase.from("inventory_items").select("id,quantity").eq("name", name).maybeSingle();
+    let error;
+    if (existing) {
+      ({ error } = await supabase.from("inventory_items").update({ quantity: Number(existing.quantity) + qty, unit_cost: cost, supplier: supplier || null } as never).eq("id", existing.id));
+    } else {
+      ({ error } = await supabase.from("inventory_items").insert({ name, quantity: qty, unit, unit_cost: cost, supplier: supplier || null } as never));
+    }
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("Order logged"); onDone(); onClose();
+  };
+  return (
+    <Modal title="Log External Order" onClose={onClose}>
+      <div className="flex border-b">
+        {(["manual", "paste", "photo"] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)} className={`flex-1 h-11 text-sm font-semibold capitalize ${tab === t ? "border-b-2 border-[#0D9488] text-[#0D9488]" : "text-gray-500"}`}>{t === "photo" ? "Upload Photo" : t === "paste" ? "Paste Text" : "Manual"}</button>
+        ))}
+      </div>
+      <div className="p-5 space-y-3">
+        {tab === "manual" && (<>
+          <Fld label="Item Name"><input value={name} onChange={(e) => setName(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+          <Fld label="Supplier"><input value={supplier} onChange={(e) => setSupplier(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+          <div className="grid grid-cols-3 gap-3">
+            <Fld label="Qty"><input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+            <Fld label="Unit"><select value={unit} onChange={(e) => setUnit(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm">{["kg", "g", "l", "ml", "pcs", "box"].map((u) => <option key={u}>{u}</option>)}</select></Fld>
+            <Fld label="Unit Cost"><input type="number" value={cost} onChange={(e) => setCost(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+          </div>
+        </>)}
+        {tab === "paste" && <textarea placeholder="Paste order text" className="w-full min-h-[160px] p-3 border rounded-md text-sm" />}
+        {tab === "photo" && <div className="border-2 border-dashed rounded-xl p-10 text-center"><Upload className="size-10 mx-auto text-gray-400 mb-3" /><p className="text-sm">Upload photo — OCR coming soon</p></div>}
+      </div>
+      <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
+        <button disabled={saving || tab !== "manual"} onClick={save} className="h-10 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">Log Order</button>
+      </div>
+    </Modal>
+  );
+}
+
+function AddSupplierModal({ items, onClose, onDone }: { items: Item[]; onClose: () => void; onDone: () => void }) {
+  const [name, setName] = useState(""); const [saving, setSaving] = useState(false);
+  const [assign, setAssign] = useState<Set<string>>(new Set());
+  const save = async () => {
+    if (!name) return toast.error("Supplier name required");
+    setSaving(true);
+    if (assign.size > 0) {
+      const { error } = await supabase.from("inventory_items").update({ supplier: name } as never).in("id", Array.from(assign));
+      setSaving(false);
+      if (error) return toast.error(error.message);
+    } else { setSaving(false); }
+    toast.success(`Supplier "${name}" saved`); onDone(); onClose();
+  };
+  return (
+    <Modal title="Add Supplier" onClose={onClose}>
+      <div className="p-5 space-y-3">
+        <Fld label="Supplier Name"><input value={name} onChange={(e) => setName(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+        <Fld label="Assign Items (optional)">
+          <div className="max-h-[240px] overflow-y-auto border rounded-md">
+            {items.length === 0 && <div className="p-3 text-sm text-[#64748B]">No items yet</div>}
+            {items.map((i) => (
+              <label key={i.id} className="flex items-center gap-2 px-3 py-2 border-b border-[#F1F5F9] cursor-pointer hover:bg-[#F9FAFB]">
+                <input type="checkbox" checked={assign.has(i.id)} onChange={(e) => setAssign((s) => { const n = new Set(s); e.target.checked ? n.add(i.id) : n.delete(i.id); return n; })} />
+                <span className="text-sm">{i.name}</span><span className="text-xs text-[#64748B] ml-auto">{i.supplier ?? "unassigned"}</span>
+              </label>
+            ))}
+          </div>
+        </Fld>
+      </div>
+      <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
+        <button disabled={saving} onClick={save} className="h-10 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">Save Supplier</button>
+      </div>
+    </Modal>
   );
 }

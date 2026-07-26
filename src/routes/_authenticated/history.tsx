@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/format";
 import {
   Receipt, ChevronDown, ChevronUp, Printer, Eye, Pencil, RotateCcw, Pause,
   Calendar, ClipboardList, LayoutGrid, List, BarChart3, Search, Copy, Check,
-  FileSpreadsheet, ArrowUpDown, Plus, X,
+  FileSpreadsheet, ArrowUpDown, Plus, X, Minus, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -105,6 +105,11 @@ function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
   const [type, setType] = useState<string>("all");
   const [range, setRange] = useState<Range>("today");
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [active, setActive] = useState<{ kind: ActionKind; order: OrderRow } | null>(null);
+  const onAction = (kind: ActionKind, order: OrderRow) => {
+    if (kind === "print-bill" || kind === "print-kot") { handleQuickPrint(kind, order); return; }
+    setActive({ kind, order });
+  };
 
   const filtered = useMemo(() => {
     const now = Date.now();
@@ -177,15 +182,22 @@ function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
           {filtered.length === 0 ? (
             <Empty label="No orders in this range" />
           ) : filtered.map((o, idx) => (
-            <OrderCard key={o.id} o={o} idx={idx + 1} expanded={open.has(o.id)} onToggle={() => setOpen((s) => { const n = new Set(s); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n; })} />
+            <OrderCard key={o.id} o={o} idx={idx + 1} expanded={open.has(o.id)} onToggle={() => setOpen((s) => { const n = new Set(s); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n; })} onAction={onAction} />
           ))}
         </div>
       ) : (
-        <GridView orders={filtered} open={open} setOpen={setOpen} />
+        <GridView orders={filtered} open={open} setOpen={setOpen} onAction={onAction} />
       )}
+
+      {active?.kind === "view" && <ViewModal order={active.order} onClose={() => setActive(null)} />}
+      {active?.kind === "refund" && <RefundModal order={active.order} onClose={() => setActive(null)} />}
+      {active?.kind === "edit-details" && <EditDetailsModal order={active.order} onClose={() => setActive(null)} />}
+      {active?.kind === "edit-items" && <EditItemsModal order={active.order} onClose={() => setActive(null)} />}
     </>
   );
 }
+
+type ActionKind = "view" | "print-bill" | "print-kot" | "refund" | "edit-details" | "edit-items";
 
 function StatCard({ tint, iconBg, label, value, sub, icon }: { tint: string; iconBg: string; label: string; value: string; sub?: string; icon: string }) {
   return (
@@ -200,7 +212,7 @@ function StatCard({ tint, iconBg, label, value, sub, icon }: { tint: string; ico
   );
 }
 
-function OrderCard({ o, idx, expanded, onToggle }: { o: OrderRow; idx: number; expanded: boolean; onToggle: () => void }) {
+function OrderCard({ o, idx, expanded, onToggle, onAction }: { o: OrderRow; idx: number; expanded: boolean; onToggle: () => void; onAction: (k: ActionKind, o: OrderRow) => void }) {
   const codeMatch = (o.note ?? "").match(/Code:([A-Z0-9]+)/);
   const code = codeMatch ? codeMatch[1] : o.id.slice(0, 4).toUpperCase();
   const time = new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
@@ -255,28 +267,28 @@ function OrderCard({ o, idx, expanded, onToggle }: { o: OrderRow; idx: number; e
           <div className="inline-flex items-center gap-1 ml-3">Order ID {o.id.slice(0, 8)}… <button onClick={() => copy(o.id)} className="text-[#9CA3AF] hover:text-[#374151]"><Copy className="size-3" /></button></div>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <ActionBtn icon={Eye} label="View" />
-          <ActionBtn icon={Printer} label="Print" tone="#F59E0B" />
-          <ActionBtn icon={RotateCcw} label="Refund" />
-          <ActionBtn icon={Pencil} label="Edit Details" />
-          <button className="h-8 px-3 rounded-lg bg-[#0D9488] text-white text-[12px] font-semibold inline-flex items-center gap-1"><Pencil className="size-3" /> Edit Items</button>
+          <ActionBtn icon={Eye} label="View" onClick={() => onAction("view", o)} />
+          <PrintDropdown onPick={(k) => onAction(k, o)} />
+          <ActionBtn icon={RotateCcw} label="Refund" onClick={() => onAction("refund", o)} />
+          <ActionBtn icon={Pencil} label="Edit Details" onClick={() => onAction("edit-details", o)} />
+          <button onClick={() => onAction("edit-items", o)} className="h-8 px-3 rounded-lg bg-[#0D9488] text-white text-[12px] font-semibold inline-flex items-center gap-1"><Pencil className="size-3" /> Edit Items</button>
         </div>
       </div>
     </div>
   );
 }
 
-function ActionBtn({ icon: Icon, label, tone }: { icon: React.ComponentType<{ className?: string }>; label: string; tone?: string }) {
+function ActionBtn({ icon: Icon, label, tone, onClick }: { icon: React.ComponentType<{ className?: string }>; label: string; tone?: string; onClick?: () => void }) {
   const color = tone ?? "#374151";
   return (
-    <button className="h-8 px-3 rounded-lg border text-[12px] font-semibold inline-flex items-center gap-1 hover:bg-[#F9FAFB]"
+    <button onClick={onClick} className="h-8 px-3 rounded-lg border text-[12px] font-semibold inline-flex items-center gap-1 hover:bg-[#F9FAFB]"
       style={{ borderColor: tone ? `${tone}66` : "#E5E7EB", color }}>
       <Icon className="size-3" /> {label}
     </button>
   );
 }
 
-function GridView({ orders, open, setOpen }: { orders: OrderRow[]; open: Set<string>; setOpen: (fn: (s: Set<string>) => Set<string>) => void }) {
+function GridView({ orders, open, setOpen, onAction }: { orders: OrderRow[]; open: Set<string>; setOpen: (fn: (s: Set<string>) => Set<string>) => void; onAction: (k: ActionKind, o: OrderRow) => void }) {
   if (orders.length === 0) return <Empty label="No orders in this range" />;
   return (
     <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden">
@@ -305,11 +317,11 @@ function GridView({ orders, open, setOpen }: { orders: OrderRow[]; open: Set<str
                   <td className="px-3 py-2"><div className="font-bold">{formatINR(Number(o.total))}</div><div className="text-[11px] text-[#9CA3AF]">+tax {formatINR(Number(o.tax))}</div></td>
                   <td className="px-3 py-2">
                     <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button className="size-7 rounded inline-flex items-center justify-center text-[#F59E0B] hover:bg-[#FEF3C7]"><Printer className="size-3.5" /></button>
-                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Eye className="size-3.5" /></button>
-                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Pencil className="size-3.5" /></button>
-                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Pause className="size-3.5" /></button>
-                      <button className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><RotateCcw className="size-3.5" /></button>
+                      <button onClick={() => onAction("print-bill", o)} title="Print Bill" className="size-7 rounded inline-flex items-center justify-center text-[#F59E0B] hover:bg-[#FEF3C7]"><Printer className="size-3.5" /></button>
+                      <button onClick={() => onAction("view", o)} title="View" className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Eye className="size-3.5" /></button>
+                      <button onClick={() => onAction("edit-details", o)} title="Edit details" className="size-7 rounded inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9]"><Pencil className="size-3.5" /></button>
+                      <button onClick={() => onAction("edit-items", o)} title="Edit items" className="size-7 rounded inline-flex items-center justify-center text-[#0D9488] hover:bg-[#F0FDFA]"><Pause className="size-3.5" /></button>
+                      <button onClick={() => onAction("refund", o)} title="Refund" className="size-7 rounded inline-flex items-center justify-center text-[#DC2626] hover:bg-[#FEE2E2]"><RotateCcw className="size-3.5" /></button>
                     </div>
                   </td>
                 </tr>
@@ -720,4 +732,292 @@ function Section({ n, title, subtitle, children }: { n: string; title: string; s
 }
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><div className="text-[10px] font-bold tracking-wider text-gray-500 mb-1">{label}</div>{children}</div>;
+}
+
+/* ---------------- Order Action Modals ---------------- */
+
+function ModalShell({ title, onClose, children, wide, full }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean; full?: boolean }) {
+  const w = full ? "w-[95vw] h-[92vh]" : wide ? "w-full max-w-3xl" : "w-full max-w-lg";
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className={`bg-white rounded-xl shadow-2xl ${w} max-h-[95vh] overflow-hidden flex flex-col`} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center justify-between shrink-0">
+          <h2 className="text-[15px] font-bold text-[#111827]">{title}</h2>
+          <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function PrintDropdown({ onPick }: { onPick: (k: ActionKind) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)} className="h-8 px-3 rounded-lg border text-[12px] font-semibold inline-flex items-center gap-1 hover:bg-[#F9FAFB]" style={{ borderColor: "#F59E0B66", color: "#F59E0B" }}>
+        <Printer className="size-3" /> Print <ChevronDown className="size-3" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white shadow-lg rounded-lg border border-[#E5E7EB] overflow-hidden w-[160px]">
+            <button onClick={() => { onPick("print-bill"); setOpen(false); }} className="w-full text-left px-3 py-2 text-[13px] hover:bg-[#F9FAFB]">🧾 Print Bill</button>
+            <button onClick={() => { onPick("print-kot"); setOpen(false); }} className="w-full text-left px-3 py-2 text-[13px] hover:bg-[#F9FAFB]">🍳 Print KOT</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function printReceipt(html: string) {
+  const w = window.open("", "_blank", "width=380,height=640");
+  if (!w) return;
+  w.document.write(`<html><head><title>Print</title><style>body{font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:14px;color:#000}h2{margin:0 0 8px;font-size:16px}table{width:100%;border-collapse:collapse;margin-top:8px}td{padding:2px 0}.r{text-align:right}.b{border-top:1px dashed #000;margin:8px 0}</style></head><body>${html}</body></html>`);
+  w.document.close(); w.focus(); setTimeout(() => { w.print(); w.close(); }, 200);
+}
+
+function renderBillHTML(o: OrderRow) {
+  const code = (o.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1] ?? o.id.slice(0, 4).toUpperCase();
+  const rows = o.items.map((it) => `<tr><td>${it.qty}× ${it.name}</td><td class="r">${formatINR((it.price ?? 0) * it.qty)}</td></tr>`).join("");
+  return `<h2>Fudiyo — Bill</h2><div>Order #${code}</div><div>${new Date(o.created_at).toLocaleString("en-IN")}</div><div>Type: ${o.order_type}</div><div class="b"></div><table>${rows}</table><div class="b"></div><table><tr><td>Subtotal</td><td class="r">${formatINR(Number(o.subtotal))}</td></tr><tr><td>Tax</td><td class="r">${formatINR(Number(o.tax))}</td></tr><tr><td><b>Total</b></td><td class="r"><b>${formatINR(Number(o.total))}</b></td></tr></table><div class="b"></div><div>Payment: ${o.payment_method ?? "—"}</div><div style="text-align:center;margin-top:10px">Thank you!</div>`;
+}
+function renderKotHTML(o: OrderRow) {
+  const code = (o.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1] ?? o.id.slice(0, 4).toUpperCase();
+  const rows = o.items.map((it) => `<tr><td>${it.qty}×</td><td>${it.name}${it.note ? `<div style="font-size:11px;color:#555">${it.note}</div>` : ""}</td></tr>`).join("");
+  return `<h2>KOT #${code}</h2><div>${new Date(o.created_at).toLocaleString("en-IN")}</div><div>${o.waiter_name ?? "Waiter"} · ${o.order_type}</div><div class="b"></div><table>${rows}</table>`;
+}
+
+export function handleQuickPrint(kind: "print-bill" | "print-kot", o: OrderRow) {
+  printReceipt(kind === "print-bill" ? renderBillHTML(o) : renderKotHTML(o));
+}
+
+function ViewModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
+  const code = (order.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1] ?? order.id.slice(0, 4).toUpperCase();
+  return (
+    <ModalShell title={`Order #${code}`} onClose={onClose} wide>
+      <div className="p-5 space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[13px]">
+          <Info label="Status" value={order.status} />
+          <Info label="Type" value={order.order_type} />
+          <Info label="Payment" value={order.payment_method ?? "—"} />
+          <Info label="Waiter" value={order.waiter_name ?? "—"} />
+          <Info label="Created" value={new Date(order.created_at).toLocaleString("en-IN")} />
+          <Info label="Subtotal" value={formatINR(Number(order.subtotal))} />
+          <Info label="Tax" value={formatINR(Number(order.tax))} />
+          <Info label="Total" value={formatINR(Number(order.total))} />
+        </div>
+        <div>
+          <div className="text-[12px] font-bold text-[#6B7280] uppercase mb-2">Items</div>
+          <div className="border border-[#E5E7EB] rounded-lg overflow-hidden">
+            <table className="w-full text-[13px]">
+              <thead className="bg-[#F9FAFB] text-[11px] uppercase text-[#6B7280]"><tr><th className="text-left px-3 py-2">Item</th><th className="text-right px-3 py-2">Qty</th><th className="text-right px-3 py-2">Price</th><th className="text-right px-3 py-2">Total</th></tr></thead>
+              <tbody>{order.items.map((it, i) => (
+                <tr key={i} className="border-t border-[#F1F5F9]"><td className="px-3 py-2">{it.name}{it.note ? <div className="text-[11px] text-[#6B7280]">{it.note}</div> : null}</td><td className="px-3 py-2 text-right">{it.qty}</td><td className="px-3 py-2 text-right">{formatINR(it.price ?? 0)}</td><td className="px-3 py-2 text-right">{formatINR((it.price ?? 0) * it.qty)}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </div>
+        {order.note && <div className="text-[12px] text-[#6B7280]"><span className="font-semibold">Note:</span> {order.note}</div>}
+        <div className="flex justify-end gap-2">
+          <button onClick={() => handleQuickPrint("print-bill", order)} className="h-9 px-4 rounded-lg border border-[#F59E0B] text-[#F59E0B] text-[13px] font-semibold inline-flex items-center gap-1"><Printer className="size-3.5" /> Print Bill</button>
+          <button onClick={onClose} className="h-9 px-4 rounded-lg bg-[#0D9488] text-white text-[13px] font-semibold">Close</button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return <div><div className="text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF]">{label}</div><div className="text-[13px] font-semibold text-[#111827] capitalize">{value}</div></div>;
+}
+
+function RefundModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
+  const [mode, setMode] = useState<"full" | "partial">("full");
+  const [reason, setReason] = useState("");
+  const [amount, setAmount] = useState<number>(Number(order.total));
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const reasons = ["Customer request", "Wrong order", "Quality issue", "Delayed", "Duplicate", "Other"];
+  const save = async () => {
+    if (!reason) return toast.error("Pick a reason");
+    setSaving(true);
+    const refundAmt = mode === "full" ? Number(order.total) : amount;
+    const note = `${order.note ?? ""} | REFUND:${refundAmt} (${reason}${notes ? ` - ${notes}` : ""})`;
+    const { error } = await supabase.from("orders").update({ status: "voided", note }).eq("id", order.id);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success(`Refunded ${formatINR(refundAmt)}`);
+    onClose();
+  };
+  return (
+    <ModalShell title="Process Refund" onClose={onClose}>
+      <div className="p-5 space-y-4">
+        <div className="flex gap-1 p-1 bg-[#F1F5F9] rounded-lg">
+          {(["full", "partial"] as const).map((m) => (
+            <button key={m} onClick={() => setMode(m)} className={`flex-1 h-9 rounded-md text-[13px] font-semibold capitalize ${mode === m ? "bg-white shadow text-[#111827]" : "text-[#6B7280]"}`}>{m} Refund</button>
+          ))}
+        </div>
+        {mode === "partial" && (
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">Refund amount (max {formatINR(Number(order.total))})</div>
+            <input type="number" value={amount} min={0} max={Number(order.total)} onChange={(e) => setAmount(Number(e.target.value))} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" />
+          </div>
+        )}
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-2">Reason</div>
+          <div className="flex flex-wrap gap-1.5">
+            {reasons.map((r) => (
+              <button key={r} onClick={() => setReason(r)} className={`h-8 px-3 rounded-full text-[12px] font-semibold border ${reason === r ? "bg-[#DC2626] text-white border-[#DC2626]" : "bg-white text-[#374151] border-[#E5E7EB]"}`}>{r}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">Notes</div>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full min-h-[70px] p-2 rounded-lg border border-[#E5E7EB] text-[13px]" placeholder="Optional…" />
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="h-10 px-4 rounded-lg border bg-white text-[13px] font-semibold">Cancel</button>
+          <button disabled={saving} onClick={save} className="h-10 px-5 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white text-[13px] font-semibold disabled:opacity-50">Process Refund</button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function EditDetailsModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
+  const parseNote = (key: string) => (order.note ?? "").match(new RegExp(`${key}:([^|]+)`))?.[1]?.trim() ?? "";
+  const [custName, setCustName] = useState(parseNote("Name"));
+  const [mobile, setMobile] = useState(parseNote("Mobile"));
+  const [tableNo, setTableNo] = useState(parseNote("Table"));
+  const [orderType, setOrderType] = useState(order.order_type);
+  const [pay, setPay] = useState(order.payment_method ?? "cash");
+  const [status, setStatus] = useState<string>(order.status);
+  const [freeNote, setFreeNote] = useState((order.note ?? "").split("|").pop()?.trim() ?? "");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    const code = (order.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1];
+    const parts = [
+      code && `Code:${code}`,
+      mobile && `Mobile:${mobile}`,
+      custName && `Name:${custName}`,
+      tableNo && `Table:${tableNo}`,
+      `Pay:${pay}`,
+      freeNote,
+    ].filter(Boolean);
+    const { error } = await supabase.from("orders").update({ order_type: orderType, payment_method: pay, status, note: parts.join(" | ") } as never).eq("id", order.id);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("Details updated");
+    onClose();
+  };
+  return (
+    <ModalShell title="Edit Order Details" onClose={onClose}>
+      <div className="p-5 space-y-3">
+        <Field label="Customer Name"><input value={custName} onChange={(e) => setCustName(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
+        <Field label="Mobile"><input value={mobile} onChange={(e) => setMobile(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Table #"><input value={tableNo} onChange={(e) => setTableNo(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
+          <Field label="Order Type"><select value={orderType} onChange={(e) => setOrderType(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="dine_in">Dine In</option><option value="takeaway">Takeaway</option><option value="delivery">Delivery</option></select></Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Payment"><select value={pay} onChange={(e) => setPay(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option></select></Field>
+          <Field label="Status"><select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="pending">Pending</option><option value="cooking">Cooking</option><option value="ready">Ready</option><option value="billed">Billed</option><option value="cleared">Cleared</option><option value="voided">Voided</option></select></Field>
+        </div>
+        <Field label="Note"><textarea value={freeNote} onChange={(e) => setFreeNote(e.target.value)} className="w-full min-h-[70px] p-2 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="h-10 px-4 rounded-lg border bg-white text-[13px] font-semibold">Cancel</button>
+          <button disabled={saving} onClick={save} className="h-10 px-5 rounded-lg bg-[#0D9488] hover:bg-[#0B7F75] text-white text-[13px] font-semibold disabled:opacity-50">Save Changes</button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><div className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">{label}</div>{children}</div>;
+}
+
+interface DishLite { id: string; name: string; category: string; price: number }
+
+function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
+  const [dishes, setDishes] = useState<DishLite[]>([]);
+  const [cart, setCart] = useState<OrderItem[]>(() => order.items.map((it) => ({ ...it })));
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("all");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { void supabase.from("dishes").select("id,name,category,price").eq("is_archived", false).order("name").then(({ data }) => { if (data) setDishes(data as DishLite[]); }); }, []);
+  const cats = useMemo(() => Array.from(new Set(dishes.map((d) => d.category))).sort(), [dishes]);
+  const visible = dishes.filter((d) => (cat === "all" || d.category === cat) && (!q || d.name.toLowerCase().includes(q.toLowerCase())));
+  const add = (d: DishLite) => setCart((c) => { const ex = c.find((x) => x.name === d.name); if (ex) return c.map((x) => x === ex ? { ...x, qty: x.qty + 1 } : x); return [...c, { name: d.name, qty: 1, price: Number(d.price) }]; });
+  const inc = (i: number) => setCart((c) => c.map((x, k) => k === i ? { ...x, qty: x.qty + 1 } : x));
+  const dec = (i: number) => setCart((c) => c.map((x, k) => k === i ? { ...x, qty: x.qty - 1 } : x).filter((x) => x.qty > 0));
+  const del = (i: number) => setCart((c) => c.filter((_, k) => k !== i));
+  const subtotal = cart.reduce((s, x) => s + (x.price ?? 0) * x.qty, 0);
+  const tax = Math.round(subtotal * 0.05);
+  const total = subtotal + tax;
+  const save = async () => {
+    if (cart.length === 0) return toast.error("At least one item required");
+    setSaving(true);
+    const { error } = await supabase.from("orders").update({ items: JSON.parse(JSON.stringify(cart)), subtotal, tax, total } as never).eq("id", order.id);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("Items updated");
+    onClose();
+  };
+  return (
+    <ModalShell title="Edit Items" onClose={onClose} full>
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-0 h-full">
+        <div className="flex flex-col border-r border-[#E5E7EB] min-h-0">
+          <div className="p-3 border-b border-[#E5E7EB] flex gap-2 flex-wrap items-center">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search menu…" className="flex-1 min-w-[200px] h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" />
+            <select value={cat} onChange={(e) => setCat(e.target.value)} className="h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="all">All Categories</option>{cats.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 md:grid-cols-3 gap-2 content-start">
+            {visible.map((d) => (
+              <button key={d.id} onClick={() => add(d)} className="text-left p-3 rounded-lg border border-[#E5E7EB] bg-white hover:border-[#0D9488] hover:shadow transition">
+                <div className="text-[13px] font-semibold text-[#111827] line-clamp-2">{d.name}</div>
+                <div className="text-[11px] text-[#9CA3AF]">{d.category}</div>
+                <div className="text-[13px] font-bold text-[#DC2626] mt-1">{formatINR(Number(d.price))}</div>
+              </button>
+            ))}
+            {visible.length === 0 && <div className="col-span-full text-center text-[13px] text-[#6B7280] py-10">No dishes match</div>}
+          </div>
+        </div>
+        <aside className="flex flex-col min-h-0">
+          <div className="p-3 border-b border-[#E5E7EB] text-[13px] font-bold text-[#111827]">Order Summary ({cart.length})</div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {cart.length === 0 && <div className="text-[13px] text-[#6B7280] text-center py-6">No items</div>}
+            {cart.map((it, i) => (
+              <div key={i} className="border border-[#E5E7EB] rounded-lg p-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0"><div className="text-[13px] font-semibold text-[#111827] truncate">{it.name}</div><div className="text-[12px] text-[#6B7280]">{formatINR(it.price ?? 0)}</div></div>
+                  <button onClick={() => del(i)} className="text-[#DC2626] hover:bg-[#FEE2E2] rounded p-1"><Trash2 className="size-3.5" /></button>
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <div className="inline-flex items-center gap-2">
+                    <button onClick={() => dec(i)} className="size-7 rounded border border-[#E5E7EB] inline-flex items-center justify-center"><Minus className="size-3" /></button>
+                    <span className="w-6 text-center text-[13px] font-semibold">{it.qty}</span>
+                    <button onClick={() => inc(i)} className="size-7 rounded border border-[#E5E7EB] inline-flex items-center justify-center"><Plus className="size-3" /></button>
+                  </div>
+                  <div className="text-[13px] font-bold">{formatINR((it.price ?? 0) * it.qty)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-[#E5E7EB] p-3 space-y-1 text-[13px]">
+            <div className="flex justify-between text-[#6B7280]"><span>Subtotal</span><span>{formatINR(subtotal)}</span></div>
+            <div className="flex justify-between text-[#6B7280]"><span>Tax (5%)</span><span>{formatINR(tax)}</span></div>
+            <div className="flex justify-between text-[15px] font-bold text-[#111827] pt-1 border-t border-[#F1F5F9]"><span>Total</span><span>{formatINR(total)}</span></div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={onClose} className="flex-1 h-10 rounded-lg border bg-white text-[13px] font-semibold">Cancel</button>
+              <button disabled={saving} onClick={save} className="flex-1 h-10 rounded-lg bg-[#0D9488] hover:bg-[#0B7F75] text-white text-[13px] font-semibold disabled:opacity-50">Save Changes</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </ModalShell>
+  );
 }
