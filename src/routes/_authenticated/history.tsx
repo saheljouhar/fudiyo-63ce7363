@@ -106,7 +106,10 @@ function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
   const [range, setRange] = useState<Range>("today");
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [active, setActive] = useState<{ kind: ActionKind; order: OrderRow } | null>(null);
-  const onAction = (kind: ActionKind, order: OrderRow) => setActive({ kind, order });
+  const onAction = (kind: ActionKind, order: OrderRow) => {
+    if (kind === "print-bill" || kind === "print-kot") { handleQuickPrint(kind, order); return; }
+    setActive({ kind, order });
+  };
 
   const filtered = useMemo(() => {
     const now = Date.now();
