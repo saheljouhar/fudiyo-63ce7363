@@ -459,13 +459,17 @@ export type Database = {
           created_at: string
           gst_number: string | null
           id: string
+          monthly_value: number
           name: string
           paper_size: string
           phone: string | null
+          plan: string
           share_live_data: boolean
           show_upi_qr: boolean
           status: string
           tax_rate: number
+          trial_contacted: boolean
+          trial_expires_at: string | null
           upi_id: string | null
         }
         Insert: {
@@ -481,13 +485,17 @@ export type Database = {
           created_at?: string
           gst_number?: string | null
           id?: string
+          monthly_value?: number
           name: string
           paper_size?: string
           phone?: string | null
+          plan?: string
           share_live_data?: boolean
           show_upi_qr?: boolean
           status?: string
           tax_rate?: number
+          trial_contacted?: boolean
+          trial_expires_at?: string | null
           upi_id?: string | null
         }
         Update: {
@@ -503,13 +511,17 @@ export type Database = {
           created_at?: string
           gst_number?: string | null
           id?: string
+          monthly_value?: number
           name?: string
           paper_size?: string
           phone?: string | null
+          plan?: string
           share_live_data?: boolean
           show_upi_qr?: boolean
           status?: string
           tax_rate?: number
+          trial_contacted?: boolean
+          trial_expires_at?: string | null
           upi_id?: string | null
         }
         Relationships: []
