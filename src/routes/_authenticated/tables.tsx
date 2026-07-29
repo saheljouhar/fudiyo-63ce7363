@@ -787,3 +787,105 @@ function QrCodesModal({ tables, onClose }: { tables: TableRow[]; onClose: () => 
     </ModalShell>
   );
 }
+
+function PlaceholderModal({ title, body, onClose }: { title: string; body: string; onClose: () => void }) {
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="flex items-center justify-between px-5 py-3 border-b">
+        <h2 className="text-[15px] font-bold">{title}</h2>
+        <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
+      </div>
+      <div className="p-6 text-center">
+        <Sparkles className="size-10 mx-auto text-[#0D9488] mb-3" strokeWidth={1.5} />
+        <p className="text-[14px] text-[#374151]">{body}</p>
+        <button onClick={onClose} className="mt-5 h-9 px-5 rounded-md bg-[#0D9488] text-white text-[13px] font-semibold">Close</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function TableActionModal({
+  table, onClose, onTakeOrder, onEdit, onStatus, onBook,
+}: {
+  table: TableRow; onClose: () => void; onTakeOrder: () => void; onEdit: () => void;
+  onStatus: (s: "cleaning" | "out_of_service") => void; onBook: () => void;
+}) {
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="flex items-center justify-between px-5 py-3 border-b">
+        <div>
+          <div className="text-[15px] font-bold text-[#111827]">Table {table.number}</div>
+          <div className="text-[12px] text-[#6B7280] capitalize">{table.status.replace("_", " ")} · {table.seats} seats</div>
+        </div>
+        <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
+      </div>
+      <div className="p-5 space-y-4">
+        <button onClick={onTakeOrder} className="w-full h-11 rounded-lg bg-[#0D9488] hover:bg-[#0B7F75] text-white text-[13px] font-bold">Take Order</button>
+
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-2">Parties & Splits</div>
+          <button onClick={onTakeOrder} className="w-full h-10 rounded-md border border-[#E5E7EB] hover:border-[#0D9488] text-[13px] font-semibold text-left px-3">
+            + New Party (B) <span className="text-[11px] text-[#6B7280] font-normal">— independent check</span>
+          </button>
+        </div>
+
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-2">Manage</div>
+          <div className="grid grid-cols-3 gap-2">
+            <button onClick={onBook} className="h-10 rounded-md border border-[#E5E7EB] hover:border-[#0D9488] text-[12px] font-semibold">Book</button>
+            <button onClick={onEdit} className="h-10 rounded-md border border-[#E5E7EB] hover:border-[#0D9488] text-[12px] font-semibold">Edit Table</button>
+            <button onClick={() => toast.info("Split coming soon")} className="h-10 rounded-md border border-[#E5E7EB] hover:border-[#0D9488] text-[12px] font-semibold">Split (A/B/C)</button>
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-2">Status</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => onStatus("cleaning")} className="h-10 rounded-md border border-[#F59E0B] text-[#B45309] hover:bg-[#FEF3C7] text-[12px] font-semibold">Mark Cleaning</button>
+            <button onClick={() => onStatus("out_of_service")} className="h-10 rounded-md border border-[#9CA3AF] text-[#4B5563] hover:bg-[#F3F4F6] text-[12px] font-semibold inline-flex items-center justify-center gap-1"><Ban className="size-3.5" /> Out of Service</button>
+          </div>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function EditTableModal({ table, floors, onClose }: { table: TableRow; floors: string[]; onClose: () => void }) {
+  const [number, setNumber] = useState(table.number);
+  const [floor, setFloor] = useState(table.floor);
+  const [seats, setSeats] = useState(table.seats);
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    const { error } = await supabase.from("tables").update({ number, floor, seats } as never).eq("id", table.id);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("Table updated");
+    onClose();
+  };
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="flex items-center justify-between px-5 py-3 border-b">
+        <h2 className="text-[15px] font-bold">Edit Table {table.number}</h2>
+        <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
+      </div>
+      <div className="p-5 space-y-3 text-[13px]">
+        <label className="block"><span className="text-[11px] font-bold uppercase text-[#6B7280]">Number</span>
+          <input value={number} onChange={(e) => setNumber(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-[#E5E7EB]" />
+        </label>
+        <label className="block"><span className="text-[11px] font-bold uppercase text-[#6B7280]">Floor</span>
+          <select value={floor} onChange={(e) => setFloor(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-[#E5E7EB]">
+            {floors.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </label>
+        <label className="block"><span className="text-[11px] font-bold uppercase text-[#6B7280]">Seats</span>
+          <input type="number" min={1} value={seats} onChange={(e) => setSeats(Number(e.target.value))} className="mt-1 w-full h-10 px-3 rounded-md border border-[#E5E7EB]" />
+        </label>
+        <div className="flex gap-2 pt-2">
+          <button onClick={onClose} className="flex-1 h-10 rounded-md border bg-white text-[13px] font-semibold">Cancel</button>
+          <button disabled={saving} onClick={save} className="flex-1 h-10 rounded-md bg-[#0D9488] text-white text-[13px] font-semibold disabled:opacity-50">Save</button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
