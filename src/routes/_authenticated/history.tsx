@@ -961,10 +961,22 @@ function EditDetailsModal({ order, onClose }: { order: OrderRow; onClose: () => 
   const [mobile, setMobile] = useState(parseNote("Mobile"));
   const [tableNo, setTableNo] = useState(parseNote("Table"));
   const [orderType, setOrderType] = useState(order.order_type);
-  const [pay, setPay] = useState(order.payment_method ?? "cash");
+  const [pay, setPay] = useState((order.payment_method ?? "cash").toLowerCase());
   const [status, setStatus] = useState<string>(order.status);
+  const [cashReceived, setCashReceived] = useState<number>(Number(order.total));
   const [freeNote, setFreeNote] = useState((order.note ?? "").split("|").pop()?.trim() ?? "");
   const [saving, setSaving] = useState(false);
+  const payMethods: { key: string; label: string }[] = [
+    { key: "cash", label: "Cash" }, { key: "upi", label: "UPI" }, { key: "card", label: "Card" },
+    { key: "online", label: "Online" }, { key: "other", label: "Other" }, { key: "settlement", label: "Settlement" },
+  ];
+  const statuses: { key: string; label: string }[] = [
+    { key: "billed", label: "Paid" }, { key: "ready", label: "Partial" }, { key: "pending", label: "Due (Udhar)" },
+  ];
+  const types: { key: string; label: string }[] = [
+    { key: "dine_in", label: "Dine-in" }, { key: "takeaway", label: "Takeaway" }, { key: "delivery", label: "Delivery" },
+  ];
+  const change = Math.max(0, cashReceived - Number(order.total));
   const save = async () => {
     setSaving(true);
     const code = (order.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1];
@@ -974,6 +986,7 @@ function EditDetailsModal({ order, onClose }: { order: OrderRow; onClose: () => 
       custName && `Name:${custName}`,
       tableNo && `Table:${tableNo}`,
       `Pay:${pay}`,
+      pay === "cash" && `CashReceived:${cashReceived}`,
       freeNote,
     ].filter(Boolean);
     const { error } = await supabase.from("orders").update({ order_type: orderType, payment_method: pay, status, note: parts.join(" | ") } as never).eq("id", order.id);
@@ -983,18 +996,67 @@ function EditDetailsModal({ order, onClose }: { order: OrderRow; onClose: () => 
     onClose();
   };
   return (
-    <ModalShell title="Edit Order Details" onClose={onClose}>
-      <div className="p-5 space-y-3">
+    <ModalShell title="Edit Order Details" onClose={onClose} wide>
+      <div className="p-5 space-y-4">
+        {/* Read-only items summary */}
+        <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-2">Items ({order.items.length})</div>
+          <ul className="space-y-1 text-[13px] max-h-[140px] overflow-y-auto">
+            {order.items.map((it, i) => (
+              <li key={i} className="flex justify-between text-[#374151]"><span>{it.qty}× {it.name}</span><span className="font-semibold text-[#111827]">{formatINR((it.price ?? 0) * it.qty)}</span></li>
+            ))}
+          </ul>
+        </div>
+
         <Field label="Customer Name"><input value={custName} onChange={(e) => setCustName(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
-        <Field label="Mobile"><input value={mobile} onChange={(e) => setMobile(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
         <div className="grid grid-cols-2 gap-3">
+          <Field label="Mobile"><input value={mobile} onChange={(e) => setMobile(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
           <Field label="Table #"><input value={tableNo} onChange={(e) => setTableNo(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
-          <Field label="Order Type"><select value={orderType} onChange={(e) => setOrderType(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="dine_in">Dine In</option><option value="takeaway">Takeaway</option><option value="delivery">Delivery</option></select></Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Payment"><select value={pay} onChange={(e) => setPay(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option></select></Field>
-          <Field label="Status"><select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="pending">Pending</option><option value="cooking">Cooking</option><option value="ready">Ready</option><option value="billed">Billed</option><option value="cleared">Cleared</option><option value="voided">Voided</option></select></Field>
-        </div>
+
+        <Field label="Delivery Type">
+          <div className="flex flex-wrap gap-1.5">
+            {types.map((t) => (
+              <button key={t.key} type="button" onClick={() => setOrderType(t.key)}
+                className={`h-9 px-4 rounded-full text-[12px] font-semibold border ${orderType === t.key ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB] hover:border-[#0D9488]"}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Payment Method">
+          <div className="flex flex-wrap gap-1.5">
+            {payMethods.map((m) => (
+              <button key={m.key} type="button" onClick={() => setPay(m.key)}
+                className={`h-9 px-4 rounded-full text-[12px] font-semibold border ${pay === m.key ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB] hover:border-[#0D9488]"}`}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        {pay === "cash" && (
+          <Field label="Cash Received">
+            <div className="flex items-center gap-3">
+              <input type="number" value={cashReceived} onChange={(e) => setCashReceived(Number(e.target.value))} className="w-40 h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" />
+              <div className="text-[12px] text-[#6B7280]">Total <span className="font-semibold text-[#111827]">{formatINR(Number(order.total))}</span></div>
+              <div className={`text-[12px] font-semibold ${change > 0 ? "text-[#16A34A]" : "text-[#6B7280]"}`}>Change: {formatINR(change)}</div>
+            </div>
+          </Field>
+        )}
+
+        <Field label="Status">
+          <div className="flex flex-wrap gap-1.5">
+            {statuses.map((s) => (
+              <button key={s.key} type="button" onClick={() => setStatus(s.key)}
+                className={`h-9 px-4 rounded-full text-[12px] font-semibold border ${status === s.key ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB] hover:border-[#0D9488]"}`}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
         <Field label="Note"><textarea value={freeNote} onChange={(e) => setFreeNote(e.target.value)} className="w-full min-h-[70px] p-2 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="h-10 px-4 rounded-lg border bg-white text-[13px] font-semibold">Cancel</button>
