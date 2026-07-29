@@ -1071,7 +1071,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><div className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">{label}</div>{children}</div>;
 }
 
-interface DishLite { id: string; name: string; category: string; price: number }
+interface DishLite { id: string; name: string; category: string; price: number; photo_url?: string | null }
 
 function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
   const [dishes, setDishes] = useState<DishLite[]>([]);
@@ -1079,7 +1079,14 @@ function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => vo
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
   const [saving, setSaving] = useState(false);
-  useEffect(() => { void supabase.from("dishes").select("id,name,category,price").eq("is_archived", false).order("name").then(({ data }) => { if (data) setDishes(data as DishLite[]); }); }, []);
+  const parseNote = (key: string) => (order.note ?? "").match(new RegExp(`${key}:([^|]+)`))?.[1]?.trim() ?? "";
+  const [orderType, setOrderType] = useState(order.order_type);
+  const [mobile, setMobile] = useState(parseNote("Mobile"));
+  const [tableNo, setTableNo] = useState(parseNote("Table"));
+  const [custName, setCustName] = useState(parseNote("Name"));
+  const [covers, setCovers] = useState<number>(1);
+  const [pay, setPay] = useState((order.payment_method ?? "cash").toLowerCase());
+  useEffect(() => { void supabase.from("dishes").select("id,name,category,price,photo_url").eq("is_archived", false).order("name").then(({ data }) => { if (data) setDishes(data as DishLite[]); }); }, []);
   const cats = useMemo(() => Array.from(new Set(dishes.map((d) => d.category))).sort(), [dishes]);
   const visible = dishes.filter((d) => (cat === "all" || d.category === cat) && (!q || d.name.toLowerCase().includes(q.toLowerCase())));
   const add = (d: DishLite) => setCart((c) => { const ex = c.find((x) => x.name === d.name); if (ex) return c.map((x) => x === ex ? { ...x, qty: x.qty + 1 } : x); return [...c, { name: d.name, qty: 1, price: Number(d.price) }]; });
@@ -1089,29 +1096,71 @@ function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => vo
   const subtotal = cart.reduce((s, x) => s + (x.price ?? 0) * x.qty, 0);
   const tax = Math.round(subtotal * 0.05);
   const total = subtotal + tax;
+  const types: { key: string; label: string }[] = [
+    { key: "dine_in", label: "Dine In" }, { key: "takeaway", label: "Takeaway" }, { key: "delivery", label: "Delivery" },
+  ];
+  const payMethods = [{ key: "cash", label: "Cash" }, { key: "upi", label: "UPI" }, { key: "card", label: "Card" }];
   const save = async () => {
     if (cart.length === 0) return toast.error("At least one item required");
     setSaving(true);
-    const { error } = await supabase.from("orders").update({ items: JSON.parse(JSON.stringify(cart)), subtotal, tax, total } as never).eq("id", order.id);
+    const code = (order.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1];
+    const parts = [
+      code && `Code:${code}`,
+      mobile && `Mobile:${mobile}`,
+      custName && `Name:${custName}`,
+      tableNo && `Table:${tableNo}`,
+      `Pay:${pay}`,
+    ].filter(Boolean);
+    const { error } = await supabase.from("orders").update({
+      items: JSON.parse(JSON.stringify(cart)), subtotal, tax, total,
+      order_type: orderType, payment_method: pay, note: parts.join(" | "),
+    } as never).eq("id", order.id);
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("Items updated");
     onClose();
   };
+  const modalTitle = (
+    <div className="flex items-center gap-3 flex-wrap">
+      <span>Edit Items</span>
+      <div className="inline-flex gap-1 p-1 bg-[#F1F5F9] rounded-lg">
+        {types.map((t) => (
+          <button key={t.key} onClick={() => setOrderType(t.key)}
+            className={`h-7 px-3 rounded-md text-[12px] font-semibold ${orderType === t.key ? "bg-white shadow text-[#0D9488]" : "text-[#6B7280]"}`}>{t.label}</button>
+        ))}
+      </div>
+    </div>
+  );
   return (
-    <ModalShell title="Edit Items" onClose={onClose} full>
+    <ModalShell title={modalTitle as unknown as string} onClose={onClose} full>
       <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-0 h-full">
         <div className="flex flex-col border-r border-[#E5E7EB] min-h-0">
-          <div className="p-3 border-b border-[#E5E7EB] flex gap-2 flex-wrap items-center">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search menu…" className="flex-1 min-w-[200px] h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" />
-            <select value={cat} onChange={(e) => setCat(e.target.value)} className="h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="all">All Categories</option>{cats.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+          <div className="p-3 border-b border-[#E5E7EB]">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search menu…" className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" />
+          </div>
+          <div className="px-3 pt-2 pb-2 border-b border-[#E5E7EB] overflow-x-auto">
+            <div className="inline-flex gap-1.5 whitespace-nowrap">
+              <button onClick={() => setCat("all")} className={`h-8 px-3 rounded-full text-[12px] font-semibold border ${cat === "all" ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB]"}`}>All</button>
+              {cats.map((c) => (
+                <button key={c} onClick={() => setCat(c)} className={`h-8 px-3 rounded-full text-[12px] font-semibold border ${cat === c ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB]"}`}>{c}</button>
+              ))}
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 md:grid-cols-3 gap-2 content-start">
             {visible.map((d) => (
-              <button key={d.id} onClick={() => add(d)} className="text-left p-3 rounded-lg border border-[#E5E7EB] bg-white hover:border-[#0D9488] hover:shadow transition">
-                <div className="text-[13px] font-semibold text-[#111827] line-clamp-2">{d.name}</div>
-                <div className="text-[11px] text-[#9CA3AF]">{d.category}</div>
-                <div className="text-[13px] font-bold text-[#DC2626] mt-1">{formatINR(Number(d.price))}</div>
+              <button key={d.id} onClick={() => add(d)} className="text-left rounded-lg border border-[#E5E7EB] bg-white hover:border-[#0D9488] hover:shadow transition overflow-hidden">
+                <div className="aspect-video bg-[#F1F5F9] flex items-center justify-center overflow-hidden">
+                  {d.photo_url ? (
+                    <img src={d.photo_url} alt={d.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-2xl font-bold text-[#94A3B8]">{d.name[0]?.toUpperCase() ?? "?"}</span>
+                  )}
+                </div>
+                <div className="p-2">
+                  <div className="text-[13px] font-semibold text-[#111827] line-clamp-2">{d.name}</div>
+                  <div className="text-[11px] text-[#9CA3AF]">{d.category}</div>
+                  <div className="text-[13px] font-bold text-[#DC2626] mt-1">{formatINR(Number(d.price))}</div>
+                </div>
               </button>
             ))}
             {visible.length === 0 && <div className="col-span-full text-center text-[13px] text-[#6B7280] py-10">No dishes match</div>}
@@ -1138,11 +1187,33 @@ function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => vo
               </div>
             ))}
           </div>
-          <div className="border-t border-[#E5E7EB] p-3 space-y-1 text-[13px]">
+          <div className="border-t border-[#E5E7EB] p-3 space-y-2 text-[13px]">
             <div className="flex justify-between text-[#6B7280]"><span>Subtotal</span><span>{formatINR(subtotal)}</span></div>
             <div className="flex justify-between text-[#6B7280]"><span>Tax (5%)</span><span>{formatINR(tax)}</span></div>
-            <div className="flex justify-between text-[15px] font-bold text-[#111827] pt-1 border-t border-[#F1F5F9]"><span>Total</span><span>{formatINR(total)}</span></div>
-            <div className="flex gap-2 pt-2">
+            <div className="rounded-lg bg-[#0D9488] text-white flex justify-between items-center px-3 py-2.5">
+              <span className="text-[13px] font-semibold">Total</span>
+              <span className="text-[16px] font-bold">{formatINR(total)}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="Mobile" className="h-9 px-2 rounded-md border border-[#E5E7EB] text-[12px]" />
+              <input value={tableNo} onChange={(e) => setTableNo(e.target.value)} placeholder="Table No" className="h-9 px-2 rounded-md border border-[#E5E7EB] text-[12px]" />
+              <input value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="Customer Name" className="col-span-2 h-9 px-2 rounded-md border border-[#E5E7EB] text-[12px]" />
+              <div className="col-span-2 flex items-center justify-between gap-2 h-9 px-2 rounded-md border border-[#E5E7EB]">
+                <span className="text-[12px] text-[#6B7280]">Covers</span>
+                <div className="inline-flex items-center gap-2">
+                  <button onClick={() => setCovers((n) => Math.max(1, n - 1))} className="size-6 rounded border border-[#E5E7EB] inline-flex items-center justify-center"><Minus className="size-3" /></button>
+                  <span className="w-5 text-center text-[13px] font-semibold">{covers}</span>
+                  <button onClick={() => setCovers((n) => n + 1)} className="size-6 rounded border border-[#E5E7EB] inline-flex items-center justify-center"><Plus className="size-3" /></button>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-1.5 pt-1">
+              {payMethods.map((m) => (
+                <button key={m.key} onClick={() => setPay(m.key)}
+                  className={`flex-1 h-9 rounded-md text-[12px] font-semibold border ${pay === m.key ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB]"}`}>{m.label}</button>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-1">
               <button onClick={onClose} className="flex-1 h-10 rounded-lg border bg-white text-[13px] font-semibold">Cancel</button>
               <button disabled={saving} onClick={save} className="flex-1 h-10 rounded-lg bg-[#0D9488] hover:bg-[#0B7F75] text-white text-[13px] font-semibold disabled:opacity-50">Save Changes</button>
             </div>
