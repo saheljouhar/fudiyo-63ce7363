@@ -858,18 +858,19 @@ export function handleQuickPrint(kind: "print-bill" | "print-kot", o: OrderRow) 
 
 function ViewModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
   const code = (order.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1] ?? order.id.slice(0, 4).toUpperCase();
+  const custName = (order.note ?? "").match(/Name:([^|]+)/)?.[1]?.trim() || "Walk-in Customer";
+  const tableNo = (order.note ?? "").match(/Table:([^|]+)/)?.[1]?.trim() || "—";
   return (
     <ModalShell title={`Order #${code}`} onClose={onClose} wide>
       <div className="p-5 space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[13px]">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
           <Info label="Status" value={order.status} />
           <Info label="Type" value={order.order_type} />
           <Info label="Payment" value={order.payment_method ?? "—"} />
           <Info label="Waiter" value={order.waiter_name ?? "—"} />
+          <Info label="Customer" value={custName} />
+          <Info label="Table" value={tableNo} />
           <Info label="Created" value={new Date(order.created_at).toLocaleString("en-IN")} />
-          <Info label="Subtotal" value={formatINR(Number(order.subtotal))} />
-          <Info label="Tax" value={formatINR(Number(order.tax))} />
-          <Info label="Total" value={formatINR(Number(order.total))} />
         </div>
         <div>
           <div className="text-[12px] font-bold text-[#6B7280] uppercase mb-2">Items</div>
@@ -883,6 +884,11 @@ function ViewModal({ order, onClose }: { order: OrderRow; onClose: () => void })
           </div>
         </div>
         {order.note && <div className="text-[12px] text-[#6B7280]"><span className="font-semibold">Note:</span> {order.note}</div>}
+        <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-4 space-y-1.5">
+          <div className="flex justify-between text-[13px] text-[#6B7280]"><span>Subtotal</span><span className="font-semibold text-[#111827]">{formatINR(Number(order.subtotal))}</span></div>
+          <div className="flex justify-between text-[13px] text-[#6B7280]"><span>Tax</span><span className="font-semibold text-[#111827]">{formatINR(Number(order.tax))}</span></div>
+          <div className="flex justify-between text-[15px] font-bold text-[#111827] pt-2 border-t border-[#E5E7EB]"><span>Total</span><span className="text-[#0D9488]">{formatINR(Number(order.total))}</span></div>
+        </div>
         <div className="flex justify-end gap-2">
           <button onClick={() => handleQuickPrint("print-bill", order)} className="h-9 px-4 rounded-lg border border-[#F59E0B] text-[#F59E0B] text-[13px] font-semibold inline-flex items-center gap-1"><Printer className="size-3.5" /> Print Bill</button>
           <button onClick={onClose} className="h-9 px-4 rounded-lg bg-[#0D9488] text-white text-[13px] font-semibold">Close</button>
