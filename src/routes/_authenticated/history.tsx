@@ -799,13 +799,13 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 
 /* ---------------- Order Action Modals ---------------- */
 
-function ModalShell({ title, onClose, children, wide, full }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean; full?: boolean }) {
+function ModalShell({ title, onClose, children, wide, full }: { title: React.ReactNode; onClose: () => void; children: React.ReactNode; wide?: boolean; full?: boolean }) {
   const w = full ? "w-[95vw] h-[92vh]" : wide ? "w-full max-w-3xl" : "w-full max-w-lg";
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className={`bg-white rounded-xl shadow-2xl ${w} max-h-[95vh] overflow-hidden flex flex-col`} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center justify-between shrink-0">
-          <h2 className="text-[15px] font-bold text-[#111827]">{title}</h2>
+          <div className="text-[15px] font-bold text-[#111827]">{title}</div>
           <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto">{children}</div>
@@ -1132,7 +1132,7 @@ function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => vo
     </div>
   );
   return (
-    <ModalShell title={modalTitle as unknown as string} onClose={onClose} full>
+    <ModalShell title={modalTitle} onClose={onClose} full>
       <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-0 h-full">
         <div className="flex flex-col border-r border-[#E5E7EB] min-h-0">
           <div className="p-3 border-b border-[#E5E7EB]">
