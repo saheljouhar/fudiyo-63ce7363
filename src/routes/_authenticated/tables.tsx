@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check, ChevronLeft, ChevronRight, Calendar, Pencil, ArrowUp, ArrowDown } from "lucide-react";
+import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check, ChevronLeft, ChevronRight, Calendar, Pencil, ArrowUp, ArrowDown, Timer, Merge, Users, LayoutGrid, LayoutTemplate, Settings as SettingsIcon, Sparkles, Ban } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,12 @@ function TablesPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [datePopOpen, setDatePopOpen] = useState(false);
   const [editingFloor, setEditingFloor] = useState<string | null>(null);
+  const [turnOpen, setTurnOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [layoutView, setLayoutView] = useState<"grid" | "layout">("grid");
+  const [tableMenu, setTableMenu] = useState<TableRow | null>(null);
+  const [editingTable, setEditingTable] = useState<TableRow | null>(null);
 
   // ticking for elapsed time
   useEffect(() => {
@@ -127,6 +133,9 @@ function TablesPage() {
             <Button variant="outline" size="sm" onClick={() => setResetOpen(true)}><RotateCcw /> Reset All</Button>
             <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}><Plus /> Add</Button>
             <Button variant="outline" size="sm" onClick={() => setQrOpen(true)}><QrCode /> QR Codes</Button>
+            <Button variant="outline" size="sm" onClick={() => setTurnOpen(true)}><Timer /> Turn Times</Button>
+            <Button variant="outline" size="sm" onClick={() => setMergeOpen(true)}><Merge /> Merge</Button>
+            <Button variant="outline" size="sm" onClick={() => setWaitlistOpen(true)}><Users /> Waitlist</Button>
           </>
         }
       />
@@ -136,6 +145,24 @@ function TablesPage() {
       {addOpen && <AddTableModal floors={floors} onClose={() => setAddOpen(false)} />}
       {qrOpen && <QrCodesModal tables={tables} onClose={() => setQrOpen(false)} />}
       {editingFloor && <EditFloorModal floor={editingFloor} floors={floors} onClose={() => setEditingFloor(null)} />}
+      {turnOpen && <PlaceholderModal title="Turn Times" body="Track how long parties stay per table. Coming soon." onClose={() => setTurnOpen(false)} />}
+      {mergeOpen && <PlaceholderModal title="Merge Tables" body="Combine two or more tables into one check. Coming soon." onClose={() => setMergeOpen(false)} />}
+      {waitlistOpen && <PlaceholderModal title="Waitlist" body="Manage walk-in queues and estimated wait times. Coming soon." onClose={() => setWaitlistOpen(false)} />}
+      {tableMenu && (
+        <TableActionModal
+          table={tableMenu}
+          onClose={() => setTableMenu(null)}
+          onTakeOrder={() => { const t = tableMenu; setTableMenu(null); takeOrder(t); }}
+          onEdit={() => { setEditingTable(tableMenu); setTableMenu(null); }}
+          onStatus={async (s) => {
+            await supabase.from("tables").update({ status: s, occupied_since: null } as never).eq("id", tableMenu.id);
+            toast.success(`Marked ${s === "cleaning" ? "for cleaning" : "out of service"}`);
+            setTableMenu(null);
+          }}
+          onBook={() => { setTableMenu(null); setBookOpen(true); }}
+        />
+      )}
+      {editingTable && <EditTableModal table={editingTable} floors={floors} onClose={() => setEditingTable(null)} />}
 
       {/* Date navigation */}
       <div className="flex items-center gap-2 mb-4">
@@ -158,11 +185,17 @@ function TablesPage() {
       </div>
 
       {/* Section tabs (toggle, underline) */}
-      <div className="flex items-center gap-1 border-b border-[#E2E8F0] mb-5">
-        <SectionTab active={section === "tables"} onClick={() => setSection("tables")}
-          label={<span className="inline-flex items-center gap-2">🪑 Table Management</span>} />
-        <SectionTab active={section === "delivery"} onClick={() => setSection("delivery")}
-          label={<span className="inline-flex items-center gap-2">🚗 Delivery / Takeaway</span>} />
+      <div className="flex items-center justify-between gap-3 border-b border-[#E2E8F0] mb-5">
+        <div className="flex items-center gap-1">
+          <SectionTab active={section === "tables"} onClick={() => setSection("tables")}
+            label={<span className="inline-flex items-center gap-2">🪑 Table Management</span>} />
+          <SectionTab active={section === "delivery"} onClick={() => setSection("delivery")}
+            label={<span className="inline-flex items-center gap-2">🚗 Delivery / Takeaway</span>} />
+        </div>
+        <div className="inline-flex border border-[#E2E8F0] rounded-lg overflow-hidden mb-2">
+          <button onClick={() => setLayoutView("grid")} className={`size-9 inline-flex items-center justify-center ${layoutView === "grid" ? "bg-[#0D9488] text-white" : "bg-white text-[#6B7280]"}`} aria-label="Grid view"><LayoutGrid className="size-4" /></button>
+          <button onClick={() => setLayoutView("layout")} className={`size-9 inline-flex items-center justify-center ${layoutView === "layout" ? "bg-[#0D9488] text-white" : "bg-white text-[#6B7280]"}`} aria-label="Layout view"><LayoutTemplate className="size-4" /></button>
+        </div>
       </div>
 
       {section === "tables" ? (
@@ -203,19 +236,28 @@ function TablesPage() {
             </button>
           </div>
 
-          {/* Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
-            {visible.map((t) => (
-              <TableCard
-                key={t.id}
-                table={t}
-                total={totals[t.id] ?? 0}
-                onTake={() => takeOrder(t)}
-                onAdd={() => navigate({ to: "/orders", search: { table: t.id } as never })}
-                onBill={() => navigate({ to: "/history", search: { table: t.id } as never })}
-              />
-            ))}
-          </div>
+          {/* Grid / Layout */}
+          {layoutView === "grid" ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
+              {visible.map((t) => (
+                <TableCard
+                  key={t.id}
+                  table={t}
+                  total={totals[t.id] ?? 0}
+                  onTake={() => takeOrder(t)}
+                  onAdd={() => navigate({ to: "/orders", search: { table: t.id } as never })}
+                  onBill={() => navigate({ to: "/history", search: { table: t.id } as never })}
+                  onGear={() => setTableMenu(t)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-[#E2E8F0] bg-white p-16 text-center">
+              <LayoutTemplate className="size-12 mx-auto text-[#CBD5E1] mb-3" strokeWidth={1.5} />
+              <p className="text-[15px] font-semibold text-[#111827]">Floor Layout Editor</p>
+              <p className="text-[13px] text-[#6B7280] mt-1">Drag-and-drop layout view is coming soon.</p>
+            </div>
+          )}
         </>
       ) : (
         <DeliverySection filter={deliveryFilter} setFilter={setDeliveryFilter} />
@@ -299,24 +341,33 @@ function FloorTab({ active, onClick, label, count }: { active: boolean; onClick:
 }
 
 function TableCard({
-  table, total, onTake, onAdd, onBill,
+  table, total, onTake, onAdd, onBill, onGear,
 }: {
   table: TableRow; total: number;
-  onTake: () => void; onAdd: () => void; onBill: () => void;
+  onTake: () => void; onAdd: () => void; onBill: () => void; onGear: () => void;
 }) {
   const dot =
     table.status === "available" ? "bg-table-available" :
     table.status === "occupied" ? "bg-table-occupied" :
-    table.status === "bill_requested" ? "bg-table-bill" : "bg-muted-foreground";
+    table.status === "bill_requested" ? "bg-table-bill" :
+    table.status === "cleaning" ? "bg-[#F59E0B]" :
+    (table.status as string) === "out_of_service" ? "bg-[#9CA3AF]" :
+    "bg-muted-foreground";
 
   const border =
     table.status === "occupied" ? "border-dashed border-table-bill" :
-    table.status === "bill_requested" ? "border-table-bill" : "border-border";
+    table.status === "bill_requested" ? "border-table-bill" :
+    table.status === "cleaning" ? "border-[#F59E0B]" :
+    (table.status as string) === "out_of_service" ? "border-[#9CA3AF] opacity-70" :
+    "border-border";
 
   return (
     <div className={`relative rounded-xl border ${border} bg-card shadow-card p-3 flex flex-col`}>
+      <button onClick={onGear} aria-label="Table options" className="absolute top-1.5 right-1.5 size-7 rounded-md inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9] z-10">
+        <SettingsIcon className="size-3.5" />
+      </button>
       {/* header row */}
-      <div className="flex items-start justify-between mb-1 gap-2">
+      <div className="flex items-start justify-between mb-1 gap-2 pr-7">
         <span className="font-bold text-foreground">{table.number}</span>
         <div className="flex items-center gap-1 flex-wrap justify-end">
           {table.status === "occupied" && table.occupied_since && (
@@ -332,6 +383,10 @@ function TableCard({
             <span className="text-[9px] font-semibold uppercase tracking-wide rounded-full px-1.5 py-0.5 bg-table-bill/15 text-table-bill">
               Bill Requested
             </span>
+          ) : table.status === "cleaning" ? (
+            <span className="text-[9px] font-semibold uppercase tracking-wide rounded-full px-1.5 py-0.5 bg-[#F59E0B]/15 text-[#D97706]">Cleaning</span>
+          ) : (table.status as string) === "out_of_service" ? (
+            <span className="text-[9px] font-semibold uppercase tracking-wide rounded-full px-1.5 py-0.5 bg-[#9CA3AF]/20 text-[#4B5563]">Out of Service</span>
           ) : (
             <span className={`size-2.5 rounded-full ${dot}`} />
           )}
