@@ -805,7 +805,13 @@ export type Database = {
         | "cleared"
         | "voided"
       order_type: "dine_in" | "takeaway" | "delivery"
-      table_status: "available" | "occupied" | "bill_requested"
+      table_status:
+        | "available"
+        | "occupied"
+        | "bill_requested"
+        | "reserved"
+        | "cleaning"
+        | "out_of_service"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -960,7 +966,14 @@ export const Constants = {
         "voided",
       ],
       order_type: ["dine_in", "takeaway", "delivery"],
-      table_status: ["available", "occupied", "bill_requested"],
+      table_status: [
+        "available",
+        "occupied",
+        "bill_requested",
+        "reserved",
+        "cleaning",
+        "out_of_service",
+      ],
     },
   },
 } as const

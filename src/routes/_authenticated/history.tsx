@@ -5,7 +5,7 @@ import { formatINR } from "@/lib/format";
 import {
   Receipt, ChevronDown, ChevronUp, Printer, Eye, Pencil, RotateCcw, Pause,
   Calendar, ClipboardList, LayoutGrid, List, BarChart3, Search, Copy, Check,
-  FileSpreadsheet, ArrowUpDown, Plus, X, Minus, Trash2,
+  FileSpreadsheet, ArrowUpDown, Plus, X, Minus, Trash2, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -40,6 +40,26 @@ function HistoryPage() {
   const [tab, setTab] = useState<Tab>("orders");
   const [view, setView] = useState<ViewMode>("list");
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [me, setMe] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+  }, []);
+
+  const exportAll = () => {
+    const rows = [["Order ID","Time","Waiter","Type","Status","Payment","Subtotal","Tax","Total","Items"]];
+    for (const o of orders) {
+      rows.push([
+        o.id, new Date(o.created_at).toLocaleString("en-IN"),
+        o.waiter_name ?? "", o.order_type, o.status, o.payment_method ?? "",
+        String(o.subtotal), String(o.tax), String(o.total),
+        o.items.map((i) => `${i.qty}x ${i.name}`).join("; "),
+      ]);
+    }
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a"); a.href = url; a.download = `orders-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -65,6 +85,9 @@ function HistoryPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[13px] text-[#6B7280]">{orders.length} orders</span>
+          <button onClick={exportAll} className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-[13px] font-semibold text-[#374151] inline-flex items-center gap-1.5 hover:bg-[#F9FAFB]">
+            <Download className="size-4" /> Export
+          </button>
           <div className="inline-flex border border-[#E5E7EB] rounded-lg overflow-hidden">
             <button onClick={() => setView("list")} className={`size-9 inline-flex items-center justify-center ${view === "list" ? "bg-[#111827] text-white" : "bg-white text-[#6B7280]"}`} aria-label="List view"><List className="size-4" /></button>
             <button onClick={() => setView("grid")} className={`size-9 inline-flex items-center justify-center ${view === "grid" ? "bg-[#111827] text-white" : "bg-white text-[#6B7280]"}`} aria-label="Grid view"><LayoutGrid className="size-4" /></button>
@@ -89,7 +112,7 @@ function HistoryPage() {
         })}
       </div>
 
-      {tab === "orders" && <OrdersTab orders={orders} view={view} />}
+      {tab === "orders" && <OrdersTab orders={orders} view={view} me={me} />}
       {tab === "scheduled" && <ScheduledTab />}
       {tab === "summary" && <SummaryTab orders={orders} />}
       {tab === "bookings" && <BookingsEmbed />}
@@ -99,13 +122,17 @@ function HistoryPage() {
 
 /* ---------------- Orders Tab ---------------- */
 
-function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
+function OrdersTab({ orders, view, me }: { orders: OrderRow[]; view: ViewMode; me: string | null }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
   const [type, setType] = useState<string>("all");
   const [range, setRange] = useState<Range>("today");
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [active, setActive] = useState<{ kind: ActionKind; order: OrderRow } | null>(null);
+  const [mine, setMine] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [customFrom, setCustomFrom] = useState<string>("");
+  const [customTo, setCustomTo] = useState<string>("");
   const onAction = (kind: ActionKind, order: OrderRow) => {
     if (kind === "print-bill" || kind === "print-kot") { handleQuickPrint(kind, order); return; }
     setActive({ kind, order });
@@ -114,22 +141,34 @@ function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
   const filtered = useMemo(() => {
     const now = Date.now();
     const startOfToday = new Date().setHours(0, 0, 0, 0);
-    const cutoff = range === "today" ? startOfToday
-      : range === "yesterday" ? startOfToday - 86400000
-      : range === "7d" ? now - 7 * 86400000 : now - 30 * 86400000;
-    const top = range === "yesterday" ? startOfToday : Infinity;
+    let cutoff: number;
+    let top: number = Infinity;
+    if (customFrom || customTo) {
+      cutoff = customFrom ? new Date(customFrom).setHours(0,0,0,0) : 0;
+      top = customTo ? new Date(customTo).setHours(23,59,59,999) : Infinity;
+    } else {
+      cutoff = range === "today" ? startOfToday
+        : range === "yesterday" ? startOfToday - 86400000
+        : range === "7d" ? now - 7 * 86400000 : now - 30 * 86400000;
+      top = range === "yesterday" ? startOfToday : Infinity;
+    }
     return orders.filter((o) => {
       const ts = new Date(o.created_at).getTime();
       if (ts < cutoff || ts >= top) return false;
       if (status !== "all" && o.status !== status) return false;
       if (type !== "all" && o.order_type !== type) return false;
+      if (mine && me) {
+        const w = (o.waiter_name ?? "").toLowerCase();
+        // Match by waiter_name substring against email or user id fragment
+        if (!w) return false;
+      }
       if (search) {
         const s = search.toLowerCase();
         if (!o.id.toLowerCase().includes(s) && !(o.waiter_name ?? "").toLowerCase().includes(s) && !(o.note ?? "").toLowerCase().includes(s)) return false;
       }
       return true;
     });
-  }, [orders, search, status, type, range]);
+  }, [orders, search, status, type, range, mine, me, customFrom, customTo]);
 
   const revenue = filtered.reduce((s, o) => s + Number(o.total), 0);
   const taxTotal = filtered.reduce((s, o) => s + Number(o.tax), 0);
@@ -165,10 +204,34 @@ function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
           <option value="delivery">Delivery</option>
         </select>
         {(["today", "yesterday", "7d", "30d"] as Range[]).map((r) => (
-          <button key={r} onClick={() => setRange(r)} className={`h-9 px-3 rounded-lg text-[12px] font-semibold capitalize ${range === r ? "bg-[#0D9488] text-white" : "border border-[#E5E7EB] bg-white text-[#6B7280]"}`}>
+          <button key={r} onClick={() => { setRange(r); setCustomFrom(""); setCustomTo(""); }} className={`h-9 px-3 rounded-lg text-[12px] font-semibold capitalize ${range === r && !customFrom && !customTo ? "bg-[#0D9488] text-white" : "border border-[#E5E7EB] bg-white text-[#6B7280]"}`}>
             {r === "today" ? "Today" : r === "yesterday" ? "Yesterday" : r.toUpperCase()}
           </button>
         ))}
+        <label className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#374151] cursor-pointer">
+          <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} className="accent-[#0D9488]" />
+          Mine
+        </label>
+        <div className="relative">
+          <button onClick={() => setDateOpen((v) => !v)} className={`size-9 rounded-lg border inline-flex items-center justify-center ${customFrom || customTo ? "bg-[#0D9488] text-white border-[#0D9488]" : "border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB]"}`} aria-label="Custom date range">
+            <Calendar className="size-4" />
+          </button>
+          {dateOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setDateOpen(false)} />
+              <div className="absolute right-0 mt-1 z-40 bg-white rounded-xl shadow-lg border border-[#E5E7EB] p-3 w-[280px]">
+                <div className="text-[11px] font-bold uppercase text-[#6B7280] mb-1">From</div>
+                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="w-full h-9 px-2 rounded-md border border-[#E5E7EB] text-[13px] mb-2" />
+                <div className="text-[11px] font-bold uppercase text-[#6B7280] mb-1">To</div>
+                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="w-full h-9 px-2 rounded-md border border-[#E5E7EB] text-[13px] mb-3" />
+                <div className="flex gap-2">
+                  <button onClick={() => { setCustomFrom(""); setCustomTo(""); setDateOpen(false); }} className="flex-1 h-9 rounded-md border border-[#E5E7EB] text-[12px] font-semibold">Clear</button>
+                  <button onClick={() => setDateOpen(false)} className="flex-1 h-9 rounded-md bg-[#0D9488] text-white text-[12px] font-semibold">Apply</button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-4 mb-4 text-[12px] text-[#6B7280] px-1">
@@ -736,13 +799,13 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 
 /* ---------------- Order Action Modals ---------------- */
 
-function ModalShell({ title, onClose, children, wide, full }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean; full?: boolean }) {
+function ModalShell({ title, onClose, children, wide, full }: { title: React.ReactNode; onClose: () => void; children: React.ReactNode; wide?: boolean; full?: boolean }) {
   const w = full ? "w-[95vw] h-[92vh]" : wide ? "w-full max-w-3xl" : "w-full max-w-lg";
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className={`bg-white rounded-xl shadow-2xl ${w} max-h-[95vh] overflow-hidden flex flex-col`} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-3 border-b border-[#E5E7EB] flex items-center justify-between shrink-0">
-          <h2 className="text-[15px] font-bold text-[#111827]">{title}</h2>
+          <div className="text-[15px] font-bold text-[#111827]">{title}</div>
           <button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto">{children}</div>
@@ -795,18 +858,19 @@ export function handleQuickPrint(kind: "print-bill" | "print-kot", o: OrderRow) 
 
 function ViewModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
   const code = (order.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1] ?? order.id.slice(0, 4).toUpperCase();
+  const custName = (order.note ?? "").match(/Name:([^|]+)/)?.[1]?.trim() || "Walk-in Customer";
+  const tableNo = (order.note ?? "").match(/Table:([^|]+)/)?.[1]?.trim() || "—";
   return (
     <ModalShell title={`Order #${code}`} onClose={onClose} wide>
       <div className="p-5 space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[13px]">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
           <Info label="Status" value={order.status} />
           <Info label="Type" value={order.order_type} />
           <Info label="Payment" value={order.payment_method ?? "—"} />
           <Info label="Waiter" value={order.waiter_name ?? "—"} />
+          <Info label="Customer" value={custName} />
+          <Info label="Table" value={tableNo} />
           <Info label="Created" value={new Date(order.created_at).toLocaleString("en-IN")} />
-          <Info label="Subtotal" value={formatINR(Number(order.subtotal))} />
-          <Info label="Tax" value={formatINR(Number(order.tax))} />
-          <Info label="Total" value={formatINR(Number(order.total))} />
         </div>
         <div>
           <div className="text-[12px] font-bold text-[#6B7280] uppercase mb-2">Items</div>
@@ -820,6 +884,11 @@ function ViewModal({ order, onClose }: { order: OrderRow; onClose: () => void })
           </div>
         </div>
         {order.note && <div className="text-[12px] text-[#6B7280]"><span className="font-semibold">Note:</span> {order.note}</div>}
+        <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-4 space-y-1.5">
+          <div className="flex justify-between text-[13px] text-[#6B7280]"><span>Subtotal</span><span className="font-semibold text-[#111827]">{formatINR(Number(order.subtotal))}</span></div>
+          <div className="flex justify-between text-[13px] text-[#6B7280]"><span>Tax</span><span className="font-semibold text-[#111827]">{formatINR(Number(order.tax))}</span></div>
+          <div className="flex justify-between text-[15px] font-bold text-[#111827] pt-2 border-t border-[#E5E7EB]"><span>Total</span><span className="text-[#0D9488]">{formatINR(Number(order.total))}</span></div>
+        </div>
         <div className="flex justify-end gap-2">
           <button onClick={() => handleQuickPrint("print-bill", order)} className="h-9 px-4 rounded-lg border border-[#F59E0B] text-[#F59E0B] text-[13px] font-semibold inline-flex items-center gap-1"><Printer className="size-3.5" /> Print Bill</button>
           <button onClick={onClose} className="h-9 px-4 rounded-lg bg-[#0D9488] text-white text-[13px] font-semibold">Close</button>
@@ -892,10 +961,22 @@ function EditDetailsModal({ order, onClose }: { order: OrderRow; onClose: () => 
   const [mobile, setMobile] = useState(parseNote("Mobile"));
   const [tableNo, setTableNo] = useState(parseNote("Table"));
   const [orderType, setOrderType] = useState(order.order_type);
-  const [pay, setPay] = useState(order.payment_method ?? "cash");
+  const [pay, setPay] = useState((order.payment_method ?? "cash").toLowerCase());
   const [status, setStatus] = useState<string>(order.status);
+  const [cashReceived, setCashReceived] = useState<number>(Number(order.total));
   const [freeNote, setFreeNote] = useState((order.note ?? "").split("|").pop()?.trim() ?? "");
   const [saving, setSaving] = useState(false);
+  const payMethods: { key: string; label: string }[] = [
+    { key: "cash", label: "Cash" }, { key: "upi", label: "UPI" }, { key: "card", label: "Card" },
+    { key: "online", label: "Online" }, { key: "other", label: "Other" }, { key: "settlement", label: "Settlement" },
+  ];
+  const statuses: { key: string; label: string }[] = [
+    { key: "billed", label: "Paid" }, { key: "ready", label: "Partial" }, { key: "pending", label: "Due (Udhar)" },
+  ];
+  const types: { key: string; label: string }[] = [
+    { key: "dine_in", label: "Dine-in" }, { key: "takeaway", label: "Takeaway" }, { key: "delivery", label: "Delivery" },
+  ];
+  const change = Math.max(0, cashReceived - Number(order.total));
   const save = async () => {
     setSaving(true);
     const code = (order.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1];
@@ -905,6 +986,7 @@ function EditDetailsModal({ order, onClose }: { order: OrderRow; onClose: () => 
       custName && `Name:${custName}`,
       tableNo && `Table:${tableNo}`,
       `Pay:${pay}`,
+      pay === "cash" && `CashReceived:${cashReceived}`,
       freeNote,
     ].filter(Boolean);
     const { error } = await supabase.from("orders").update({ order_type: orderType, payment_method: pay, status, note: parts.join(" | ") } as never).eq("id", order.id);
@@ -914,18 +996,67 @@ function EditDetailsModal({ order, onClose }: { order: OrderRow; onClose: () => 
     onClose();
   };
   return (
-    <ModalShell title="Edit Order Details" onClose={onClose}>
-      <div className="p-5 space-y-3">
+    <ModalShell title="Edit Order Details" onClose={onClose} wide>
+      <div className="p-5 space-y-4">
+        {/* Read-only items summary */}
+        <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-2">Items ({order.items.length})</div>
+          <ul className="space-y-1 text-[13px] max-h-[140px] overflow-y-auto">
+            {order.items.map((it, i) => (
+              <li key={i} className="flex justify-between text-[#374151]"><span>{it.qty}× {it.name}</span><span className="font-semibold text-[#111827]">{formatINR((it.price ?? 0) * it.qty)}</span></li>
+            ))}
+          </ul>
+        </div>
+
         <Field label="Customer Name"><input value={custName} onChange={(e) => setCustName(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
-        <Field label="Mobile"><input value={mobile} onChange={(e) => setMobile(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
         <div className="grid grid-cols-2 gap-3">
+          <Field label="Mobile"><input value={mobile} onChange={(e) => setMobile(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
           <Field label="Table #"><input value={tableNo} onChange={(e) => setTableNo(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
-          <Field label="Order Type"><select value={orderType} onChange={(e) => setOrderType(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="dine_in">Dine In</option><option value="takeaway">Takeaway</option><option value="delivery">Delivery</option></select></Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Payment"><select value={pay} onChange={(e) => setPay(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option></select></Field>
-          <Field label="Status"><select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="pending">Pending</option><option value="cooking">Cooking</option><option value="ready">Ready</option><option value="billed">Billed</option><option value="cleared">Cleared</option><option value="voided">Voided</option></select></Field>
-        </div>
+
+        <Field label="Delivery Type">
+          <div className="flex flex-wrap gap-1.5">
+            {types.map((t) => (
+              <button key={t.key} type="button" onClick={() => setOrderType(t.key)}
+                className={`h-9 px-4 rounded-full text-[12px] font-semibold border ${orderType === t.key ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB] hover:border-[#0D9488]"}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Payment Method">
+          <div className="flex flex-wrap gap-1.5">
+            {payMethods.map((m) => (
+              <button key={m.key} type="button" onClick={() => setPay(m.key)}
+                className={`h-9 px-4 rounded-full text-[12px] font-semibold border ${pay === m.key ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB] hover:border-[#0D9488]"}`}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        {pay === "cash" && (
+          <Field label="Cash Received">
+            <div className="flex items-center gap-3">
+              <input type="number" value={cashReceived} onChange={(e) => setCashReceived(Number(e.target.value))} className="w-40 h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" />
+              <div className="text-[12px] text-[#6B7280]">Total <span className="font-semibold text-[#111827]">{formatINR(Number(order.total))}</span></div>
+              <div className={`text-[12px] font-semibold ${change > 0 ? "text-[#16A34A]" : "text-[#6B7280]"}`}>Change: {formatINR(change)}</div>
+            </div>
+          </Field>
+        )}
+
+        <Field label="Status">
+          <div className="flex flex-wrap gap-1.5">
+            {statuses.map((s) => (
+              <button key={s.key} type="button" onClick={() => setStatus(s.key)}
+                className={`h-9 px-4 rounded-full text-[12px] font-semibold border ${status === s.key ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB] hover:border-[#0D9488]"}`}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
         <Field label="Note"><textarea value={freeNote} onChange={(e) => setFreeNote(e.target.value)} className="w-full min-h-[70px] p-2 rounded-lg border border-[#E5E7EB] text-[13px]" /></Field>
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="h-10 px-4 rounded-lg border bg-white text-[13px] font-semibold">Cancel</button>
@@ -940,7 +1071,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><div className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">{label}</div>{children}</div>;
 }
 
-interface DishLite { id: string; name: string; category: string; price: number }
+interface DishLite { id: string; name: string; category: string; price: number; photo_url?: string | null }
 
 function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
   const [dishes, setDishes] = useState<DishLite[]>([]);
@@ -948,7 +1079,14 @@ function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => vo
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
   const [saving, setSaving] = useState(false);
-  useEffect(() => { void supabase.from("dishes").select("id,name,category,price").eq("is_archived", false).order("name").then(({ data }) => { if (data) setDishes(data as DishLite[]); }); }, []);
+  const parseNote = (key: string) => (order.note ?? "").match(new RegExp(`${key}:([^|]+)`))?.[1]?.trim() ?? "";
+  const [orderType, setOrderType] = useState(order.order_type);
+  const [mobile, setMobile] = useState(parseNote("Mobile"));
+  const [tableNo, setTableNo] = useState(parseNote("Table"));
+  const [custName, setCustName] = useState(parseNote("Name"));
+  const [covers, setCovers] = useState<number>(1);
+  const [pay, setPay] = useState((order.payment_method ?? "cash").toLowerCase());
+  useEffect(() => { void supabase.from("dishes").select("id,name,category,price,photo_url").eq("is_archived", false).order("name").then(({ data }) => { if (data) setDishes(data as DishLite[]); }); }, []);
   const cats = useMemo(() => Array.from(new Set(dishes.map((d) => d.category))).sort(), [dishes]);
   const visible = dishes.filter((d) => (cat === "all" || d.category === cat) && (!q || d.name.toLowerCase().includes(q.toLowerCase())));
   const add = (d: DishLite) => setCart((c) => { const ex = c.find((x) => x.name === d.name); if (ex) return c.map((x) => x === ex ? { ...x, qty: x.qty + 1 } : x); return [...c, { name: d.name, qty: 1, price: Number(d.price) }]; });
@@ -958,29 +1096,71 @@ function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => vo
   const subtotal = cart.reduce((s, x) => s + (x.price ?? 0) * x.qty, 0);
   const tax = Math.round(subtotal * 0.05);
   const total = subtotal + tax;
+  const types: { key: string; label: string }[] = [
+    { key: "dine_in", label: "Dine In" }, { key: "takeaway", label: "Takeaway" }, { key: "delivery", label: "Delivery" },
+  ];
+  const payMethods = [{ key: "cash", label: "Cash" }, { key: "upi", label: "UPI" }, { key: "card", label: "Card" }];
   const save = async () => {
     if (cart.length === 0) return toast.error("At least one item required");
     setSaving(true);
-    const { error } = await supabase.from("orders").update({ items: JSON.parse(JSON.stringify(cart)), subtotal, tax, total } as never).eq("id", order.id);
+    const code = (order.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1];
+    const parts = [
+      code && `Code:${code}`,
+      mobile && `Mobile:${mobile}`,
+      custName && `Name:${custName}`,
+      tableNo && `Table:${tableNo}`,
+      `Pay:${pay}`,
+    ].filter(Boolean);
+    const { error } = await supabase.from("orders").update({
+      items: JSON.parse(JSON.stringify(cart)), subtotal, tax, total,
+      order_type: orderType, payment_method: pay, note: parts.join(" | "),
+    } as never).eq("id", order.id);
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("Items updated");
     onClose();
   };
+  const modalTitle = (
+    <div className="flex items-center gap-3 flex-wrap">
+      <span>Edit Items</span>
+      <div className="inline-flex gap-1 p-1 bg-[#F1F5F9] rounded-lg">
+        {types.map((t) => (
+          <button key={t.key} onClick={() => setOrderType(t.key)}
+            className={`h-7 px-3 rounded-md text-[12px] font-semibold ${orderType === t.key ? "bg-white shadow text-[#0D9488]" : "text-[#6B7280]"}`}>{t.label}</button>
+        ))}
+      </div>
+    </div>
+  );
   return (
-    <ModalShell title="Edit Items" onClose={onClose} full>
+    <ModalShell title={modalTitle} onClose={onClose} full>
       <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-0 h-full">
         <div className="flex flex-col border-r border-[#E5E7EB] min-h-0">
-          <div className="p-3 border-b border-[#E5E7EB] flex gap-2 flex-wrap items-center">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search menu…" className="flex-1 min-w-[200px] h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" />
-            <select value={cat} onChange={(e) => setCat(e.target.value)} className="h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]"><option value="all">All Categories</option>{cats.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+          <div className="p-3 border-b border-[#E5E7EB]">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search menu…" className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-[13px]" />
+          </div>
+          <div className="px-3 pt-2 pb-2 border-b border-[#E5E7EB] overflow-x-auto">
+            <div className="inline-flex gap-1.5 whitespace-nowrap">
+              <button onClick={() => setCat("all")} className={`h-8 px-3 rounded-full text-[12px] font-semibold border ${cat === "all" ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB]"}`}>All</button>
+              {cats.map((c) => (
+                <button key={c} onClick={() => setCat(c)} className={`h-8 px-3 rounded-full text-[12px] font-semibold border ${cat === c ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB]"}`}>{c}</button>
+              ))}
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 md:grid-cols-3 gap-2 content-start">
             {visible.map((d) => (
-              <button key={d.id} onClick={() => add(d)} className="text-left p-3 rounded-lg border border-[#E5E7EB] bg-white hover:border-[#0D9488] hover:shadow transition">
-                <div className="text-[13px] font-semibold text-[#111827] line-clamp-2">{d.name}</div>
-                <div className="text-[11px] text-[#9CA3AF]">{d.category}</div>
-                <div className="text-[13px] font-bold text-[#DC2626] mt-1">{formatINR(Number(d.price))}</div>
+              <button key={d.id} onClick={() => add(d)} className="text-left rounded-lg border border-[#E5E7EB] bg-white hover:border-[#0D9488] hover:shadow transition overflow-hidden">
+                <div className="aspect-video bg-[#F1F5F9] flex items-center justify-center overflow-hidden">
+                  {d.photo_url ? (
+                    <img src={d.photo_url} alt={d.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-2xl font-bold text-[#94A3B8]">{d.name[0]?.toUpperCase() ?? "?"}</span>
+                  )}
+                </div>
+                <div className="p-2">
+                  <div className="text-[13px] font-semibold text-[#111827] line-clamp-2">{d.name}</div>
+                  <div className="text-[11px] text-[#9CA3AF]">{d.category}</div>
+                  <div className="text-[13px] font-bold text-[#DC2626] mt-1">{formatINR(Number(d.price))}</div>
+                </div>
               </button>
             ))}
             {visible.length === 0 && <div className="col-span-full text-center text-[13px] text-[#6B7280] py-10">No dishes match</div>}
@@ -1007,11 +1187,33 @@ function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => vo
               </div>
             ))}
           </div>
-          <div className="border-t border-[#E5E7EB] p-3 space-y-1 text-[13px]">
+          <div className="border-t border-[#E5E7EB] p-3 space-y-2 text-[13px]">
             <div className="flex justify-between text-[#6B7280]"><span>Subtotal</span><span>{formatINR(subtotal)}</span></div>
             <div className="flex justify-between text-[#6B7280]"><span>Tax (5%)</span><span>{formatINR(tax)}</span></div>
-            <div className="flex justify-between text-[15px] font-bold text-[#111827] pt-1 border-t border-[#F1F5F9]"><span>Total</span><span>{formatINR(total)}</span></div>
-            <div className="flex gap-2 pt-2">
+            <div className="rounded-lg bg-[#0D9488] text-white flex justify-between items-center px-3 py-2.5">
+              <span className="text-[13px] font-semibold">Total</span>
+              <span className="text-[16px] font-bold">{formatINR(total)}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="Mobile" className="h-9 px-2 rounded-md border border-[#E5E7EB] text-[12px]" />
+              <input value={tableNo} onChange={(e) => setTableNo(e.target.value)} placeholder="Table No" className="h-9 px-2 rounded-md border border-[#E5E7EB] text-[12px]" />
+              <input value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="Customer Name" className="col-span-2 h-9 px-2 rounded-md border border-[#E5E7EB] text-[12px]" />
+              <div className="col-span-2 flex items-center justify-between gap-2 h-9 px-2 rounded-md border border-[#E5E7EB]">
+                <span className="text-[12px] text-[#6B7280]">Covers</span>
+                <div className="inline-flex items-center gap-2">
+                  <button onClick={() => setCovers((n) => Math.max(1, n - 1))} className="size-6 rounded border border-[#E5E7EB] inline-flex items-center justify-center"><Minus className="size-3" /></button>
+                  <span className="w-5 text-center text-[13px] font-semibold">{covers}</span>
+                  <button onClick={() => setCovers((n) => n + 1)} className="size-6 rounded border border-[#E5E7EB] inline-flex items-center justify-center"><Plus className="size-3" /></button>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-1.5 pt-1">
+              {payMethods.map((m) => (
+                <button key={m.key} onClick={() => setPay(m.key)}
+                  className={`flex-1 h-9 rounded-md text-[12px] font-semibold border ${pay === m.key ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB]"}`}>{m.label}</button>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-1">
               <button onClick={onClose} className="flex-1 h-10 rounded-lg border bg-white text-[13px] font-semibold">Cancel</button>
               <button disabled={saving} onClick={save} className="flex-1 h-10 rounded-lg bg-[#0D9488] hover:bg-[#0B7F75] text-white text-[13px] font-semibold disabled:opacity-50">Save Changes</button>
             </div>
