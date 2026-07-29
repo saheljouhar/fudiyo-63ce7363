@@ -5,7 +5,7 @@ import { formatINR } from "@/lib/format";
 import {
   Receipt, ChevronDown, ChevronUp, Printer, Eye, Pencil, RotateCcw, Pause,
   Calendar, ClipboardList, LayoutGrid, List, BarChart3, Search, Copy, Check,
-  FileSpreadsheet, ArrowUpDown, Plus, X, Minus, Trash2,
+  FileSpreadsheet, ArrowUpDown, Plus, X, Minus, Trash2, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -40,6 +40,26 @@ function HistoryPage() {
   const [tab, setTab] = useState<Tab>("orders");
   const [view, setView] = useState<ViewMode>("list");
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [me, setMe] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+  }, []);
+
+  const exportAll = () => {
+    const rows = [["Order ID","Time","Waiter","Type","Status","Payment","Subtotal","Tax","Total","Items"]];
+    for (const o of orders) {
+      rows.push([
+        o.id, new Date(o.created_at).toLocaleString("en-IN"),
+        o.waiter_name ?? "", o.order_type, o.status, o.payment_method ?? "",
+        String(o.subtotal), String(o.tax), String(o.total),
+        o.items.map((i) => `${i.qty}x ${i.name}`).join("; "),
+      ]);
+    }
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a"); a.href = url; a.download = `orders-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -65,6 +85,9 @@ function HistoryPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[13px] text-[#6B7280]">{orders.length} orders</span>
+          <button onClick={exportAll} className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-[13px] font-semibold text-[#374151] inline-flex items-center gap-1.5 hover:bg-[#F9FAFB]">
+            <Download className="size-4" /> Export
+          </button>
           <div className="inline-flex border border-[#E5E7EB] rounded-lg overflow-hidden">
             <button onClick={() => setView("list")} className={`size-9 inline-flex items-center justify-center ${view === "list" ? "bg-[#111827] text-white" : "bg-white text-[#6B7280]"}`} aria-label="List view"><List className="size-4" /></button>
             <button onClick={() => setView("grid")} className={`size-9 inline-flex items-center justify-center ${view === "grid" ? "bg-[#111827] text-white" : "bg-white text-[#6B7280]"}`} aria-label="Grid view"><LayoutGrid className="size-4" /></button>
@@ -89,7 +112,7 @@ function HistoryPage() {
         })}
       </div>
 
-      {tab === "orders" && <OrdersTab orders={orders} view={view} />}
+      {tab === "orders" && <OrdersTab orders={orders} view={view} me={me} />}
       {tab === "scheduled" && <ScheduledTab />}
       {tab === "summary" && <SummaryTab orders={orders} />}
       {tab === "bookings" && <BookingsEmbed />}
@@ -99,13 +122,17 @@ function HistoryPage() {
 
 /* ---------------- Orders Tab ---------------- */
 
-function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
+function OrdersTab({ orders, view, me }: { orders: OrderRow[]; view: ViewMode; me: string | null }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
   const [type, setType] = useState<string>("all");
   const [range, setRange] = useState<Range>("today");
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [active, setActive] = useState<{ kind: ActionKind; order: OrderRow } | null>(null);
+  const [mine, setMine] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [customFrom, setCustomFrom] = useState<string>("");
+  const [customTo, setCustomTo] = useState<string>("");
   const onAction = (kind: ActionKind, order: OrderRow) => {
     if (kind === "print-bill" || kind === "print-kot") { handleQuickPrint(kind, order); return; }
     setActive({ kind, order });
@@ -114,22 +141,34 @@ function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
   const filtered = useMemo(() => {
     const now = Date.now();
     const startOfToday = new Date().setHours(0, 0, 0, 0);
-    const cutoff = range === "today" ? startOfToday
-      : range === "yesterday" ? startOfToday - 86400000
-      : range === "7d" ? now - 7 * 86400000 : now - 30 * 86400000;
-    const top = range === "yesterday" ? startOfToday : Infinity;
+    let cutoff: number;
+    let top: number = Infinity;
+    if (customFrom || customTo) {
+      cutoff = customFrom ? new Date(customFrom).setHours(0,0,0,0) : 0;
+      top = customTo ? new Date(customTo).setHours(23,59,59,999) : Infinity;
+    } else {
+      cutoff = range === "today" ? startOfToday
+        : range === "yesterday" ? startOfToday - 86400000
+        : range === "7d" ? now - 7 * 86400000 : now - 30 * 86400000;
+      top = range === "yesterday" ? startOfToday : Infinity;
+    }
     return orders.filter((o) => {
       const ts = new Date(o.created_at).getTime();
       if (ts < cutoff || ts >= top) return false;
       if (status !== "all" && o.status !== status) return false;
       if (type !== "all" && o.order_type !== type) return false;
+      if (mine && me) {
+        const w = (o.waiter_name ?? "").toLowerCase();
+        // Match by waiter_name substring against email or user id fragment
+        if (!w) return false;
+      }
       if (search) {
         const s = search.toLowerCase();
         if (!o.id.toLowerCase().includes(s) && !(o.waiter_name ?? "").toLowerCase().includes(s) && !(o.note ?? "").toLowerCase().includes(s)) return false;
       }
       return true;
     });
-  }, [orders, search, status, type, range]);
+  }, [orders, search, status, type, range, mine, me, customFrom, customTo]);
 
   const revenue = filtered.reduce((s, o) => s + Number(o.total), 0);
   const taxTotal = filtered.reduce((s, o) => s + Number(o.tax), 0);
@@ -165,10 +204,34 @@ function OrdersTab({ orders, view }: { orders: OrderRow[]; view: ViewMode }) {
           <option value="delivery">Delivery</option>
         </select>
         {(["today", "yesterday", "7d", "30d"] as Range[]).map((r) => (
-          <button key={r} onClick={() => setRange(r)} className={`h-9 px-3 rounded-lg text-[12px] font-semibold capitalize ${range === r ? "bg-[#0D9488] text-white" : "border border-[#E5E7EB] bg-white text-[#6B7280]"}`}>
+          <button key={r} onClick={() => { setRange(r); setCustomFrom(""); setCustomTo(""); }} className={`h-9 px-3 rounded-lg text-[12px] font-semibold capitalize ${range === r && !customFrom && !customTo ? "bg-[#0D9488] text-white" : "border border-[#E5E7EB] bg-white text-[#6B7280]"}`}>
             {r === "today" ? "Today" : r === "yesterday" ? "Yesterday" : r.toUpperCase()}
           </button>
         ))}
+        <label className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#374151] cursor-pointer">
+          <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} className="accent-[#0D9488]" />
+          Mine
+        </label>
+        <div className="relative">
+          <button onClick={() => setDateOpen((v) => !v)} className={`size-9 rounded-lg border inline-flex items-center justify-center ${customFrom || customTo ? "bg-[#0D9488] text-white border-[#0D9488]" : "border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB]"}`} aria-label="Custom date range">
+            <Calendar className="size-4" />
+          </button>
+          {dateOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setDateOpen(false)} />
+              <div className="absolute right-0 mt-1 z-40 bg-white rounded-xl shadow-lg border border-[#E5E7EB] p-3 w-[280px]">
+                <div className="text-[11px] font-bold uppercase text-[#6B7280] mb-1">From</div>
+                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="w-full h-9 px-2 rounded-md border border-[#E5E7EB] text-[13px] mb-2" />
+                <div className="text-[11px] font-bold uppercase text-[#6B7280] mb-1">To</div>
+                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="w-full h-9 px-2 rounded-md border border-[#E5E7EB] text-[13px] mb-3" />
+                <div className="flex gap-2">
+                  <button onClick={() => { setCustomFrom(""); setCustomTo(""); setDateOpen(false); }} className="flex-1 h-9 rounded-md border border-[#E5E7EB] text-[12px] font-semibold">Clear</button>
+                  <button onClick={() => setDateOpen(false)} className="flex-1 h-9 rounded-md bg-[#0D9488] text-white text-[12px] font-semibold">Apply</button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-4 mb-4 text-[12px] text-[#6B7280] px-1">
