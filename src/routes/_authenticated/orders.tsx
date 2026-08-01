@@ -137,6 +137,19 @@ function OrdersPage() {
     })();
   }, [tableId]);
 
+  const refreshTables = async () => {
+    const { data: tbls } = await supabase.from("tables").select("id, number, seats, status").order("number");
+    if (tbls) setTablesData(tbls as TableRow[]);
+    const { data: ords } = await supabase
+      .from("orders")
+      .select("id, table_id, total, items, created_at, note")
+      .in("status", ["pending", "cooking", "ready"])
+      .order("created_at", { ascending: false });
+    if (ords) setActiveOrders(ords as unknown as ActiveOrder[]);
+  };
+
+  useEffect(() => { if (showTables) void refreshTables(); }, [showTables]);
+
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
