@@ -278,9 +278,10 @@ function OrdersPage() {
       ...cart.filter((c) => c.note).map((c) => `${c.name}:${c.note}`),
     ].filter(Boolean) as string[];
     const status = kind === "kot" ? "pending" : "billed";
+    const activeTableId = servingTable?.id ?? tableId ?? null;
     const { data, error } = await supabase.from("orders").insert({
       restaurant_id: restaurantId,
-      table_id: tableId ?? null,
+      table_id: activeTableId,
       waiter_id: user?.id,
       waiter_name: name,
       items: JSON.parse(JSON.stringify(cart)),
@@ -292,14 +293,19 @@ function OrdersPage() {
     }).select("id").maybeSingle();
     setSending(false);
     if (error) return toast.error(error.message);
-    if (tableId) {
-      await supabase.from("tables").update({ status: kind === "kot" ? "occupied" : "available" }).eq("id", tableId);
+    if (activeTableId) {
+      await supabase.from("tables").update({ status: kind === "kot" ? "occupied" : "available" }).eq("id", activeTableId);
     }
     const billNo = Math.floor(Math.random() * 9000) + 1000;
     setPost({ kind, billNo, shortId: orderCode, at: new Date().toLocaleString("en-IN"), items: cart, subtotal, tax, total, orderType, custName, pay });
     if (kind === "billed") {
       // Order completed — clear code so next view gets new ID
       localStorage.removeItem(LS_CODE);
+      if (servingTable) {
+        setServingTable(null);
+        await refreshTables();
+        setShowTables(true);
+      }
     }
   };
 
