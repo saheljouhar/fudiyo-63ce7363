@@ -326,10 +326,10 @@ function OrdersPage() {
   const pickTable = async (t: TableRow) => {
     setTableNo(String(t.number));
     setShowTables(false);
-    await supabase.from("tables").update({ status: "occupied" }).eq("id", t.id);
-    toast.success(`Table ${t.number} loaded`);
-    // refresh tables list status optimistically
-    setTablesData((arr) => arr.map((x) => x.id === t.id ? { ...x, status: "occupied" } : x));
+    setServingTable({ id: t.id, number: String(t.number) });
+    setJustTaken(t.id);
+    setTimeout(() => setJustTaken((v) => (v === t.id ? null : v)), 5000);
+    toast.success(`Serving Table ${t.number}`);
   };
 
   const categoryKeys = Object.keys(grouped);
