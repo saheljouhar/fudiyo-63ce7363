@@ -146,3 +146,45 @@
 .animate-pulse-border { animation: pulse-border 1.2s ease-in-out infinite; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { scrollbar-width: none; }
+
+/* Occupied table card: continuously travelling amber dashed border */
+@property --dash-rotate {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes dash-travel {
+  to { --dash-rotate: 360deg; }
+}
+.table-dash-occupied {
+  position: relative;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.table-dash-occupied::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(from var(--dash-rotate),
+    #F59E0B 0deg 18deg, transparent 18deg 36deg,
+    #F59E0B 36deg 54deg, transparent 54deg 72deg,
+    #F59E0B 72deg 90deg, transparent 90deg 108deg,
+    #F59E0B 108deg 126deg, transparent 126deg 144deg,
+    #F59E0B 144deg 162deg, transparent 162deg 180deg,
+    #F59E0B 180deg 198deg, transparent 198deg 216deg,
+    #F59E0B 216deg 234deg, transparent 234deg 252deg,
+    #F59E0B 252deg 270deg, transparent 270deg 288deg,
+    #F59E0B 288deg 306deg, transparent 306deg 324deg,
+    #F59E0B 324deg 342deg, transparent 342deg 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: dash-travel 8s linear infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .table-dash-occupied::before { animation: none; }
+}
