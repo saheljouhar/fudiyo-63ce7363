@@ -7,7 +7,7 @@ import {
   Grid3x3, UtensilsCrossed, Flame, UserRound, Save, ChefHat, Menu as MenuIcon,
   Check, ChevronDown, LayoutGrid, Rows3, Square, StickyNote, X, Truck,
   CreditCard, Printer, Plus as PlusIcon, MapPin, Armchair, Volume2, VolumeX,
-  RotateCw,
+  RotateCw, Eye, Users, Clock, ReceiptText, Map as MapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
@@ -23,6 +23,7 @@ interface Dish { id: string; name: string; category: string; price: number; is_a
 interface CartItem { id: string; name: string; price: number; qty: number; is_veg?: boolean; note?: string }
 interface SavedCart { id: string; label: string; cart: CartItem[]; orderType: OrderType; at: string; code: string }
 interface TableRow { id: string; number: string; seats: number; status: string }
+interface ActiveOrder { id: string; table_id: string | null; total: number; items: CartItem[]; created_at: string; note: string | null }
 type OrderType = "dine_in" | "takeaway" | "delivery";
 type PayMethod = "cash" | "upi" | "card";
 type GridMode = "compact" | "standard" | "large";
