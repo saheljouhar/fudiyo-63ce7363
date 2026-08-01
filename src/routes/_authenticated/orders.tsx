@@ -149,6 +149,7 @@ function OrdersPage() {
   };
 
   useEffect(() => { if (showTables) void refreshTables(); }, [showTables]);
+  useEffect(() => { if (!showTables) setJustTaken([]); }, [showTables]);
 
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -483,8 +484,9 @@ function OrdersPage() {
           </>
         )}
 
-        {/* RIGHT - Order summary (always visible) */}
-        <aside className="w-[440px] xl:w-[480px] shrink-0 bg-white border-l border-[#E5E7EB] flex flex-col">
+        {/* RIGHT - Order summary (hidden in Tables mode) */}
+        {!showTables && (
+        <aside className="w-[420px] shrink-0 bg-white border-l border-[#E5E7EB] flex flex-col">
           <div className="bg-[#0D9488] text-white px-4 py-3 shrink-0">
             {servingTable && (
               <div className="flex items-center justify-between gap-2 mb-2 bg-white/15 rounded-lg px-2.5 py-1.5">
@@ -806,7 +808,7 @@ function TablesPreview({
   orders: ActiveOrder[];
   view: "grid" | "map";
   setView: (v: "grid" | "map") => void;
-  justTaken: string | null;
+  justTaken: string[];
   onPick: (t: TableRow) => void;
   onView: (t: TableRow) => void;
   onAdd: (t: TableRow) => void;
@@ -864,10 +866,11 @@ function TablesPreview({
             const tot = list.reduce((s, o) => s + Number(o.total ?? 0), 0);
             const since = list.length ? list[list.length - 1].created_at : null;
             const dot = occupied ? "bg-[#F59E0B]" : t.status === "available" ? "bg-[#16A34A]" : "bg-[#9CA3AF]";
-            const glow = justTaken === t.id ? "ring-2 ring-[#0D9488] ring-offset-2" : "";
+            const big = justTaken.includes(t.id);
             return (
               <div key={t.id}
-                className={`bg-white rounded-xl p-3 flex flex-col gap-2 transition ${glow} ${occupied ? "border-2 border-dashed border-[#F59E0B]" : "border border-[#E5E7EB]"}`}>
+                style={big ? { gridColumn: "span 2", gridRow: "span 2" } : undefined}
+                className={`bg-white rounded-xl p-3 flex flex-col gap-2 transition ${big ? "ring-2 ring-[#0D9488] shadow-lg text-[1.1em]" : ""} ${occupied ? "table-dash-occupied" : "border border-[#E5E7EB]"}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-[20px] font-bold text-[#111827]">T{t.number}</span>
                   <div className="flex items-center gap-1.5">
