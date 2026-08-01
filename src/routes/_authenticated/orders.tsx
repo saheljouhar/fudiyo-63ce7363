@@ -7,7 +7,7 @@ import {
   Grid3x3, UtensilsCrossed, Flame, UserRound, Save, ChefHat, Menu as MenuIcon,
   Check, ChevronDown, LayoutGrid, Rows3, Square, StickyNote, X, Truck,
   CreditCard, Printer, Plus as PlusIcon, MapPin, Armchair, Volume2, VolumeX,
-  RotateCw,
+  RotateCw, Eye, Users, Clock, ReceiptText, Map as MapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
@@ -23,6 +23,7 @@ interface Dish { id: string; name: string; category: string; price: number; is_a
 interface CartItem { id: string; name: string; price: number; qty: number; is_veg?: boolean; note?: string }
 interface SavedCart { id: string; label: string; cart: CartItem[]; orderType: OrderType; at: string; code: string }
 interface TableRow { id: string; number: string; seats: number; status: string }
+interface ActiveOrder { id: string; table_id: string | null; total: number; items: CartItem[]; created_at: string; note: string | null }
 type OrderType = "dine_in" | "takeaway" | "delivery";
 type PayMethod = "cash" | "upi" | "card";
 type GridMode = "compact" | "standard" | "large";
@@ -103,6 +104,11 @@ function OrdersPage() {
 
   const [showTables, setShowTables] = useState(false);
   const [tablesData, setTablesData] = useState<TableRow[]>([]);
+  const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
+  const [tablesView, setTablesView] = useState<"grid" | "map">("grid");
+  const [servingTable, setServingTable] = useState<{ id: string; number: string } | null>(null);
+  const [justTaken, setJustTaken] = useState<string | null>(null);
+  const [detailTable, setDetailTable] = useState<TableRow | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifSound, setNotifSound] = useState<boolean>(() => (typeof window !== "undefined" ? localStorage.getItem(LS_SOUND) !== "0" : true));
   useEffect(() => { localStorage.setItem(LS_SOUND, notifSound ? "1" : "0"); }, [notifSound]);
@@ -130,6 +136,19 @@ function OrdersPage() {
       }
     })();
   }, [tableId]);
+
+  const refreshTables = async () => {
+    const { data: tbls } = await supabase.from("tables").select("id, number, seats, status").order("number");
+    if (tbls) setTablesData(tbls as TableRow[]);
+    const { data: ords } = await supabase
+      .from("orders")
+      .select("id, table_id, total, items, created_at, note")
+      .in("status", ["pending", "cooking", "ready"])
+      .order("created_at", { ascending: false });
+    if (ords) setActiveOrders(ords as unknown as ActiveOrder[]);
+  };
+
+  useEffect(() => { if (showTables) void refreshTables(); }, [showTables]);
 
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -259,9 +278,10 @@ function OrdersPage() {
       ...cart.filter((c) => c.note).map((c) => `${c.name}:${c.note}`),
     ].filter(Boolean) as string[];
     const status = kind === "kot" ? "pending" : "billed";
+    const activeTableId = servingTable?.id ?? tableId ?? null;
     const { data, error } = await supabase.from("orders").insert({
       restaurant_id: restaurantId,
-      table_id: tableId ?? null,
+      table_id: activeTableId,
       waiter_id: user?.id,
       waiter_name: name,
       items: JSON.parse(JSON.stringify(cart)),
@@ -273,14 +293,19 @@ function OrdersPage() {
     }).select("id").maybeSingle();
     setSending(false);
     if (error) return toast.error(error.message);
-    if (tableId) {
-      await supabase.from("tables").update({ status: kind === "kot" ? "occupied" : "available" }).eq("id", tableId);
+    if (activeTableId) {
+      await supabase.from("tables").update({ status: kind === "kot" ? "occupied" : "available" }).eq("id", activeTableId);
     }
     const billNo = Math.floor(Math.random() * 9000) + 1000;
     setPost({ kind, billNo, shortId: orderCode, at: new Date().toLocaleString("en-IN"), items: cart, subtotal, tax, total, orderType, custName, pay });
     if (kind === "billed") {
       // Order completed — clear code so next view gets new ID
       localStorage.removeItem(LS_CODE);
+      if (servingTable) {
+        setServingTable(null);
+        await refreshTables();
+        setShowTables(true);
+      }
     }
   };
 
@@ -307,10 +332,10 @@ function OrdersPage() {
   const pickTable = async (t: TableRow) => {
     setTableNo(String(t.number));
     setShowTables(false);
-    await supabase.from("tables").update({ status: "occupied" }).eq("id", t.id);
-    toast.success(`Table ${t.number} loaded`);
-    // refresh tables list status optimistically
-    setTablesData((arr) => arr.map((x) => x.id === t.id ? { ...x, status: "occupied" } : x));
+    setServingTable({ id: t.id, number: String(t.number) });
+    setJustTaken(t.id);
+    setTimeout(() => setJustTaken((v) => (v === t.id ? null : v)), 5000);
+    toast.success(`Serving Table ${t.number}`);
   };
 
   const categoryKeys = Object.keys(grouped);
@@ -338,7 +363,17 @@ function OrdersPage() {
       {printerOpen && <PrinterSetupModal onClose={() => setPrinterOpen(false)} />}
       <div className="flex bg-[#F9FAFB]" style={{ height: "calc(100vh - 56px)" }}>
         {showTables ? (
-          <TablesPreview tables={tablesData} onPick={pickTable} />
+          <TablesPreview
+            tables={tablesData}
+            orders={activeOrders}
+            view={tablesView}
+            setView={setTablesView}
+            justTaken={justTaken}
+            onPick={pickTable}
+            onView={(t) => setDetailTable(t)}
+            onAdd={(t) => { setServingTable({ id: t.id, number: String(t.number) }); setTableNo(String(t.number)); setShowTables(false); }}
+            onRefresh={refreshTables}
+          />
         ) : (
           <>
             {/* LEFT */}
@@ -450,8 +485,17 @@ function OrdersPage() {
         )}
 
         {/* RIGHT - Order summary (always visible) */}
-        <aside className="w-[360px] shrink-0 bg-white border-l border-[#E5E7EB] flex flex-col">
+        <aside className="w-[440px] xl:w-[480px] shrink-0 bg-white border-l border-[#E5E7EB] flex flex-col">
           <div className="bg-[#0D9488] text-white px-4 py-3 shrink-0">
+            {servingTable && (
+              <div className="flex items-center justify-between gap-2 mb-2 bg-white/15 rounded-lg px-2.5 py-1.5">
+                <span className="text-[12px] font-bold uppercase tracking-wide inline-flex items-center gap-1.5">
+                  <Armchair className="size-4" /> Serving — Table {servingTable.number}
+                </span>
+                <button onClick={() => setShowTables(true)}
+                  className="h-7 px-2.5 rounded-md bg-white text-[#0D9488] text-[11px] font-bold">Change</button>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className="flex items-center gap-2 min-w-0">
                 <ShoppingCart className="size-5 shrink-0" />
@@ -624,6 +668,20 @@ function OrdersPage() {
         </aside>
       </div>
 
+      {detailTable && (
+        <TableOrderDetailModal
+          table={detailTable}
+          orders={activeOrders.filter((o) => o.table_id === detailTable.id)}
+          onClose={() => setDetailTable(null)}
+          onAddItems={() => {
+            setServingTable({ id: detailTable.id, number: String(detailTable.number) });
+            setTableNo(String(detailTable.number));
+            setDetailTable(null);
+            setShowTables(false);
+          }}
+        />
+      )}
+
       {/* Note modal */}
       {noteFor && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setNoteFor(null)}>
@@ -737,36 +795,170 @@ function TopNav({
   );
 }
 
-function TablesPreview({ tables, onPick }: { tables: TableRow[]; onPick: (t: TableRow) => void }) {
+function elapsed(iso: string) {
+  const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+function TablesPreview({
+  tables, orders, view, setView, justTaken, onPick, onView, onAdd, onRefresh,
+}: {
+  tables: TableRow[];
+  orders: ActiveOrder[];
+  view: "grid" | "map";
+  setView: (v: "grid" | "map") => void;
+  justTaken: string | null;
+  onPick: (t: TableRow) => void;
+  onView: (t: TableRow) => void;
+  onAdd: (t: TableRow) => void;
+  onRefresh: () => void;
+}) {
+  const byTable = useMemo(() => {
+    const m: Record<string, ActiveOrder[]> = {};
+    for (const o of orders) if (o.table_id) (m[o.table_id] ||= []).push(o);
+    return m;
+  }, [orders]);
+
   return (
     <section className="flex-1 min-w-0 overflow-y-auto p-6">
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <MapPin className="size-5 text-[#0D9488]" />
         <h2 className="text-[18px] font-bold text-[#111827]">Ground Floor</h2>
         <span className="bg-[#F0FDFA] text-[#0D9488] text-[12px] font-semibold px-2 py-0.5 rounded-full">{tables.length} Tables</span>
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={onRefresh} className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-[13px] font-semibold text-[#374151] inline-flex items-center gap-1.5 hover:bg-[#F9FAFB]">
+            <RotateCw className="size-4" /> Refresh
+          </button>
+          <div className="inline-flex border border-[#E5E7EB] rounded-lg overflow-hidden bg-white">
+            <button onClick={() => setView("grid")} className={`h-9 px-3 text-[13px] font-semibold inline-flex items-center gap-1.5 ${view === "grid" ? "bg-[#0D9488] text-white" : "text-[#374151]"}`}>
+              <LayoutGrid className="size-4" /> Grid
+            </button>
+            <button onClick={() => setView("map")} className={`h-9 px-3 text-[13px] font-semibold inline-flex items-center gap-1.5 ${view === "map" ? "bg-[#0D9488] text-white" : "text-[#374151]"}`}>
+              <MapIcon className="size-4" /> Floor Map
+            </button>
+          </div>
+        </div>
       </div>
       {tables.length === 0 ? (
         <div className="text-center text-[#6B7280] py-12 text-sm">No tables configured.</div>
-      ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
+      ) : view === "map" ? (
+        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))" }}>
           {tables.map((t) => {
-            const dot = t.status === "available" ? "bg-[#16A34A]" : t.status === "occupied" ? "bg-[#F59E0B]" : "bg-[#9CA3AF]";
+            const list = byTable[t.id] ?? [];
+            const occupied = t.status === "occupied" || list.length > 0;
+            const tot = list.reduce((s, o) => s + Number(o.total ?? 0), 0);
             return (
-              <div key={t.id} className="bg-white rounded-xl border border-[#E5E7EB] p-3 flex flex-col gap-2">
+              <div key={t.id}
+                className={`rounded-lg h-[76px] flex flex-col items-center justify-center border ${occupied ? "bg-[#FFFBEB] border-[#F59E0B]" : "bg-[#F0FDF4] border-[#16A34A]"}`}>
+                <span className="text-[16px] font-bold text-[#111827]">T{t.number}</span>
+                <span className="text-[11px] text-[#6B7280]">{t.seats} seats</span>
+                {occupied && tot > 0 && <span className="text-[12px] font-bold text-[#B45309]">{formatINR(tot)}</span>}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(184px, 1fr))" }}>
+          {tables.map((t) => {
+            const list = byTable[t.id] ?? [];
+            const occupied = t.status === "occupied" || list.length > 0;
+            const tot = list.reduce((s, o) => s + Number(o.total ?? 0), 0);
+            const since = list.length ? list[list.length - 1].created_at : null;
+            const dot = occupied ? "bg-[#F59E0B]" : t.status === "available" ? "bg-[#16A34A]" : "bg-[#9CA3AF]";
+            const glow = justTaken === t.id ? "ring-2 ring-[#0D9488] ring-offset-2" : "";
+            return (
+              <div key={t.id}
+                className={`bg-white rounded-xl p-3 flex flex-col gap-2 transition ${glow} ${occupied ? "border-2 border-dashed border-[#F59E0B]" : "border border-[#E5E7EB]"}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-[20px] font-bold text-[#111827]">T{t.number}</span>
-                  <span className={`size-3 rounded-full ${dot}`} />
+                  <div className="flex items-center gap-1.5">
+                    {occupied && since && (
+                      <span className="text-[10px] font-bold text-[#B45309] bg-[#FEF3C7] px-1.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                        <Clock className="size-3" /> {elapsed(since)}
+                      </span>
+                    )}
+                    <span className={`size-3 rounded-full ${dot}`} />
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 text-[12px] text-[#6B7280]"><Armchair className="size-4" /> {t.seats} seats</div>
-                <button onClick={() => onPick(t)} className="mt-1 w-full h-10 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[13px] font-semibold inline-flex items-center justify-center gap-1">
-                  <ClipboardList className="size-4" /> Take Order
-                </button>
+                <div className="flex items-center gap-2 text-[12px] text-[#6B7280]">
+                  <span className="inline-flex items-center gap-1"><Armchair className="size-4" /> {t.seats} seats</span>
+                  {list.length > 1 && (
+                    <span className="inline-flex items-center gap-1 text-[#B45309] font-semibold"><Users className="size-3.5" /> {list.length} parties</span>
+                  )}
+                </div>
+                {occupied ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <button onClick={() => onView(t)} aria-label={`View order for table ${t.number}`}
+                        className="size-8 rounded-lg border border-[#E5E7EB] text-[#0D9488] hover:bg-[#F0FDFA] inline-flex items-center justify-center">
+                        <Eye className="size-4" />
+                      </button>
+                      <div className="text-right">
+                        <div className="text-[10px] uppercase font-bold text-[#9CA3AF] leading-none">Total</div>
+                        <div className="text-[16px] font-bold text-[#111827] leading-tight">{formatINR(tot)}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button onClick={() => onAdd(t)} className="h-9 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[12px] font-semibold">Add</button>
+                      <button onClick={() => onAdd(t)} className="h-9 rounded-lg bg-[#F59E0B] hover:bg-[#D97706] text-white text-[12px] font-semibold">Bill</button>
+                      <button onClick={() => window.print()} className="h-9 rounded-lg border border-[#E5E7EB] text-[#374151] text-[12px] font-semibold inline-flex items-center justify-center gap-1">
+                        <Printer className="size-3.5" /> Print
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={() => onPick(t)} className="mt-1 w-full h-10 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white text-[13px] font-semibold inline-flex items-center justify-center gap-1">
+                    <ClipboardList className="size-4" /> Take Order
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
       )}
     </section>
+  );
+}
+
+function TableOrderDetailModal({
+  table, orders, onClose, onAddItems,
+}: { table: TableRow; orders: ActiveOrder[]; onClose: () => void; onAddItems: () => void }) {
+  const items = orders.flatMap((o) => (Array.isArray(o.items) ? o.items : []));
+  const subtotal = items.reduce((s, i) => s + (i.price ?? 0) * i.qty, 0);
+  const tax = Math.round(subtotal * 0.05);
+  const code = (orders[0]?.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1] ?? orders[0]?.id.slice(0, 4).toUpperCase() ?? "—";
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
+          <div>
+            <div className="text-[16px] font-bold text-[#111827]">Table {table.number}</div>
+            <div className="text-[12px] text-[#6B7280]">Order #{code}</div>
+          </div>
+          <button onClick={onClose} className="size-8 rounded-lg text-[#9CA3AF] hover:bg-[#F1F5F9] inline-flex items-center justify-center"><X className="size-4" /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+          {items.length === 0 && <div className="text-[13px] text-[#6B7280] text-center py-6">No items on this table.</div>}
+          {items.map((it, i) => (
+            <div key={i} className="flex items-center justify-between text-[13px]">
+              <span className="text-[#111827]">{it.name} <span className="text-[#6B7280]">× {it.qty}</span></span>
+              <span className="font-semibold text-[#111827]">{formatINR((it.price ?? 0) * it.qty)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="px-5 py-4 border-t border-[#E5E7EB] space-y-1.5 bg-[#F9FAFB]">
+          <div className="flex justify-between text-[13px] text-[#6B7280]"><span>Subtotal</span><span className="font-semibold text-[#111827]">{formatINR(subtotal)}</span></div>
+          <div className="flex justify-between text-[13px] text-[#6B7280]"><span>GST (5%)</span><span className="font-semibold text-[#111827]">{formatINR(tax)}</span></div>
+          <div className="flex justify-between text-[15px] font-bold text-[#111827] pt-2 border-t border-[#E5E7EB]"><span>Total</span><span className="text-[#0D9488]">{formatINR(subtotal + tax)}</span></div>
+        </div>
+        <div className="px-5 py-4 flex gap-2 border-t border-[#E5E7EB]">
+          <button onClick={onAddItems} className="flex-1 h-11 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[13px] font-bold inline-flex items-center justify-center gap-1">
+            <PlusIcon className="size-4" /> Add Items
+          </button>
+          <button onClick={onClose} className="flex-1 h-11 rounded-lg border border-[#E5E7EB] text-[#374151] text-[13px] font-semibold">Close</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
