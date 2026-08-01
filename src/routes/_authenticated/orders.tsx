@@ -363,7 +363,17 @@ function OrdersPage() {
       {printerOpen && <PrinterSetupModal onClose={() => setPrinterOpen(false)} />}
       <div className="flex bg-[#F9FAFB]" style={{ height: "calc(100vh - 56px)" }}>
         {showTables ? (
-          <TablesPreview tables={tablesData} onPick={pickTable} />
+          <TablesPreview
+            tables={tablesData}
+            orders={activeOrders}
+            view={tablesView}
+            setView={setTablesView}
+            justTaken={justTaken}
+            onPick={pickTable}
+            onView={(t) => setDetailTable(t)}
+            onAdd={(t) => { setServingTable({ id: t.id, number: String(t.number) }); setTableNo(String(t.number)); setShowTables(false); }}
+            onRefresh={refreshTables}
+          />
         ) : (
           <>
             {/* LEFT */}
@@ -475,8 +485,17 @@ function OrdersPage() {
         )}
 
         {/* RIGHT - Order summary (always visible) */}
-        <aside className="w-[360px] shrink-0 bg-white border-l border-[#E5E7EB] flex flex-col">
+        <aside className="w-[440px] xl:w-[480px] shrink-0 bg-white border-l border-[#E5E7EB] flex flex-col">
           <div className="bg-[#0D9488] text-white px-4 py-3 shrink-0">
+            {servingTable && (
+              <div className="flex items-center justify-between gap-2 mb-2 bg-white/15 rounded-lg px-2.5 py-1.5">
+                <span className="text-[12px] font-bold uppercase tracking-wide inline-flex items-center gap-1.5">
+                  <Armchair className="size-4" /> Serving — Table {servingTable.number}
+                </span>
+                <button onClick={() => setShowTables(true)}
+                  className="h-7 px-2.5 rounded-md bg-white text-[#0D9488] text-[11px] font-bold">Change</button>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className="flex items-center gap-2 min-w-0">
                 <ShoppingCart className="size-5 shrink-0" />
