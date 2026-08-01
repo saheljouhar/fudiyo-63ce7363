@@ -670,6 +670,7 @@ function OrdersPage() {
 
       {/* Note modal */}
       {noteFor && (
+        <>
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setNoteFor(null)}>
           <div className="bg-white rounded-xl p-4 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <div className="text-[14px] font-bold mb-2">Add note for {noteFor.name}</div>
