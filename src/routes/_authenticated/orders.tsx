@@ -107,7 +107,7 @@ function OrdersPage() {
   const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
   const [tablesView, setTablesView] = useState<"grid" | "map">("grid");
   const [servingTable, setServingTable] = useState<{ id: string; number: string } | null>(null);
-  const [justTaken, setJustTaken] = useState<string | null>(null);
+  const [justTaken, setJustTaken] = useState<string[]>([]);
   const [detailTable, setDetailTable] = useState<TableRow | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifSound, setNotifSound] = useState<boolean>(() => (typeof window !== "undefined" ? localStorage.getItem(LS_SOUND) !== "0" : true));
@@ -301,11 +301,12 @@ function OrdersPage() {
     if (kind === "billed") {
       // Order completed — clear code so next view gets new ID
       localStorage.removeItem(LS_CODE);
-      if (servingTable) {
-        setServingTable(null);
-        await refreshTables();
-        setShowTables(true);
-      }
+      if (servingTable) setServingTable(null);
+    }
+    if (kind === "kot" && activeTableId) {
+      setJustTaken((v) => (v.includes(activeTableId) ? v : [...v, activeTableId]));
+      await refreshTables();
+      setShowTables(true);
     }
   };
 
@@ -333,8 +334,6 @@ function OrdersPage() {
     setTableNo(String(t.number));
     setShowTables(false);
     setServingTable({ id: t.id, number: String(t.number) });
-    setJustTaken(t.id);
-    setTimeout(() => setJustTaken((v) => (v === t.id ? null : v)), 5000);
     toast.success(`Serving Table ${t.number}`);
   };
 
