@@ -667,6 +667,7 @@ function OrdersPage() {
             </div>
           )}
         </aside>
+        )}
       </div>
 
       {detailTable && (
