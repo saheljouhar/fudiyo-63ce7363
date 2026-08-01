@@ -104,6 +104,11 @@ function OrdersPage() {
 
   const [showTables, setShowTables] = useState(false);
   const [tablesData, setTablesData] = useState<TableRow[]>([]);
+  const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
+  const [tablesView, setTablesView] = useState<"grid" | "map">("grid");
+  const [servingTable, setServingTable] = useState<{ id: string; number: string } | null>(null);
+  const [justTaken, setJustTaken] = useState<string | null>(null);
+  const [detailTable, setDetailTable] = useState<TableRow | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifSound, setNotifSound] = useState<boolean>(() => (typeof window !== "undefined" ? localStorage.getItem(LS_SOUND) !== "0" : true));
   useEffect(() => { localStorage.setItem(LS_SOUND, notifSound ? "1" : "0"); }, [notifSound]);
