@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { formatINR } from "@/lib/format";
-import { Plus, Pencil, Trash2, Copy, Search, Camera, Eye, Star, Upload, QrCode, Image as ImageIcon, ImageOff, LayoutGrid, List, X, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, Search, Camera, Eye, Star, Upload, QrCode, Image as ImageIcon, ImageOff, LayoutGrid, List, X, Download, MoreHorizontal, EyeOff, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/menu")({
@@ -21,6 +21,14 @@ interface Dish {
   is_featured: boolean;
   photo_url: string | null;
   restaurant_id: string;
+  is_veg: boolean;
+  short_code: string | null;
+  hsn_code: string | null;
+  tax_pricing: string | null;
+  hide_image: boolean;
+  images: unknown;
+  variants: unknown;
+  modifier_groups: unknown;
 }
 
 function MenuPage() {
@@ -33,6 +41,7 @@ function MenuPage() {
   const [showQr, setShowQr] = useState(false);
   const [showCustomize, setShowCustomize] = useState(false);
   const [editing, setEditing] = useState<Partial<Dish> | null>(null);
+  const [viewing, setViewing] = useState<Dish | null>(null);
 
   const load = async () => {
     const { data } = await supabase.from("dishes").select("*").eq("is_archived", false).order("category").order("display_order");
@@ -76,6 +85,18 @@ function MenuPage() {
     const { error } = await supabase.from("dishes").update({ is_archived: true }).eq("id", d.id);
     if (error) toast.error(error.message);
     else toast.success("Dish removed");
+  };
+
+  const toggleHideImage = async (d: Dish) => {
+    const { error } = await supabase.from("dishes").update({ hide_image: !d.hide_image }).eq("id", d.id);
+    if (error) toast.error(error.message);
+    else toast.success(d.hide_image ? "Image shown" : "Image hidden");
+  };
+
+  const toggleFeatured = async (d: Dish) => {
+    const { error } = await supabase.from("dishes").update({ is_featured: !d.is_featured }).eq("id", d.id);
+    if (error) toast.error(error.message);
+    else toast.success(d.is_featured ? "Removed from favorites" : "Added to favorites");
   };
 
   return (
@@ -134,12 +155,33 @@ function MenuPage() {
       ) : (
         <div className={view === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "flex flex-col gap-2"}>
           {visible.map((d, i) => (
-            <DishCard key={d.id} d={d} index={i + 1} hideImage={hideImages} onEdit={() => setEditing(d)} onDup={() => duplicate(d)} onDel={() => del(d)} onToggle={() => toggleAvail(d)} />
+            <DishCard
+              key={d.id}
+              d={d}
+              index={i + 1}
+              hideImage={hideImages || d.hide_image}
+              onEdit={() => setEditing(d)}
+              onDup={() => duplicate(d)}
+              onDel={() => del(d)}
+              onToggle={() => toggleAvail(d)}
+              onView={() => setViewing(d)}
+              onHideImage={() => toggleHideImage(d)}
+              onFavorite={() => toggleFeatured(d)}
+            />
           ))}
         </div>
       )}
 
       {editing && <DishDrawer initial={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+      {viewing && (
+        <ViewDetailsModal
+          d={viewing}
+          onClose={() => setViewing(null)}
+          onEdit={() => { setEditing(viewing); setViewing(null); }}
+          onMarkOut={async () => { await toggleAvail(viewing); setViewing(null); }}
+          onDelete={async () => { await del(viewing); setViewing(null); }}
+        />
+      )}
       {showQr && <QrModal onClose={() => setShowQr(false)} />}
       {showCustomize && <CustomizeOverlay dishes={dishes} onClose={() => setShowCustomize(false)} />}
     </main>
@@ -195,7 +237,12 @@ function QrModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function DishCard({ d, index, hideImage, onEdit, onDup, onDel, onToggle }: { d: Dish; index: number; hideImage?: boolean; onEdit: () => void; onDup: () => void; onDel: () => void; onToggle: () => void }) {
+function DishCard({ d, index, hideImage, onEdit, onDup, onDel, onToggle, onView, onHideImage, onFavorite }: {
+  d: Dish; index: number; hideImage?: boolean;
+  onEdit: () => void; onDup: () => void; onDel: () => void; onToggle: () => void;
+  onView: () => void; onHideImage: () => void; onFavorite: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div className={`rounded-xl border border-border bg-card overflow-hidden shadow-card transition ${!d.is_available ? "opacity-70" : ""}`}>
       {!hideImage && (
@@ -205,30 +252,131 @@ function DishCard({ d, index, hideImage, onEdit, onDup, onDel, onToggle }: { d: 
           ) : (
             <div className="text-[#0D9488] text-5xl font-bold">{d.name[0]?.toUpperCase()}</div>
           )}
-          <span className="absolute top-2 left-2 size-3.5 rounded-full bg-[#16A34A] border-2 border-white shadow" title="Vegetarian" />
+          <VegMark isVeg={d.is_veg} className="absolute top-2 left-2" />
+          {!d.is_available && (
+            <span className="absolute top-2 right-2 text-[10px] font-bold bg-[#DC2626] text-white px-2 py-0.5 rounded-full">Out of stock</span>
+          )}
+          {d.is_featured && (
+            <span className="absolute bottom-2 left-2 text-[10px] font-bold bg-[#F59E0B] text-white px-2 py-0.5 rounded-full inline-flex items-center gap-1"><Star className="size-3" /> Featured</span>
+          )}
           <span className="absolute bottom-2 right-2 text-[10px] font-bold bg-black/70 text-white px-2 py-0.5 rounded-full">#{index}</span>
         </div>
       )}
       <div className="p-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="font-semibold text-[16px] leading-tight">{d.name}</div>
+          <div className="font-semibold text-[16px] leading-tight flex items-center gap-1.5">
+            {hideImage && <VegMark isVeg={d.is_veg} />}
+            {d.name}
+          </div>
           <div className="text-base font-bold text-[#0D9488] tabular-nums">{formatINR(d.price)}</div>
         </div>
-        <div className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded inline-block mt-1.5">{d.category}</div>
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded">{d.category}</span>
+          {d.short_code && <span className="text-[11px] font-semibold text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded">{d.short_code}</span>}
+        </div>
         {d.description && <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{d.description}</div>}
-        <div className="flex items-center justify-between mt-3 gap-1">
-          <IconBtn title="Edit" onClick={onEdit} className="text-[#2563EB]"><Pencil className="size-4" /></IconBtn>
-          <IconBtn title="Hide" onClick={onToggle} className={d.is_available ? "text-[#F59E0B]" : "text-[#16A34A]"}>
-            <span className={`size-3 rounded-full ${d.is_available ? "bg-[#F59E0B]" : "bg-[#16A34A]"}`} />
-          </IconBtn>
-          <IconBtn title="Hide Image" className="text-[#7C3AED]"><ImageOff className="size-4" /></IconBtn>
-          <IconBtn title="Duplicate" onClick={onDup} className="text-[#16A34A]"><Copy className="size-4" /></IconBtn>
-          <IconBtn title="Feature"><Star className="size-4" /></IconBtn>
-          <IconBtn title="Delete" onClick={onDel} className="text-[#DC2626]"><Trash2 className="size-4" /></IconBtn>
+        <div className="flex items-center gap-1.5 mt-3">
+          <button onClick={onEdit} className="flex-1 h-9 rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5">
+            <Pencil className="size-3.5" /> Edit
+          </button>
+          <button onClick={onToggle} className={`flex-1 h-9 rounded-lg text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 ${d.is_available ? "bg-[#F59E0B] hover:bg-[#D97706]" : "bg-[#16A34A] hover:bg-[#15803D]"}`}>
+            {d.is_available ? <><EyeOff className="size-3.5" /> Hide</> : <><Eye className="size-3.5" /> Show</>}
+          </button>
+          <IconBtn title="View details" onClick={onView} className="text-[#0D9488] border border-border size-9"><Eye className="size-4" /></IconBtn>
+          <div className="relative">
+            <IconBtn title="More" onClick={() => setMenuOpen((v) => !v)} className="text-muted-foreground border border-border size-9"><MoreHorizontal className="size-4" /></IconBtn>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 bottom-full mb-1 z-40 w-[176px] bg-white rounded-xl border border-border shadow-lg py-1">
+                  <MenuItem icon={<ImageOff className="size-4 text-[#7C3AED]" />} label={d.hide_image ? "Show image" : "Hide image"} onClick={() => { setMenuOpen(false); onHideImage(); }} />
+                  <MenuItem icon={<Copy className="size-4 text-[#16A34A]" />} label="Duplicate" onClick={() => { setMenuOpen(false); onDup(); }} />
+                  <MenuItem icon={<Star className="size-4 text-[#F59E0B]" />} label={d.is_featured ? "Unfavorite" : "Mark favorite"} onClick={() => { setMenuOpen(false); onFavorite(); }} />
+                  <MenuItem icon={<Trash2 className="size-4 text-[#DC2626]" />} label="Delete" onClick={() => { setMenuOpen(false); onDel(); }} danger />
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function VegMark({ isVeg, className = "" }: { isVeg: boolean; className?: string }) {
+  const color = isVeg ? "#16A34A" : "#DC2626";
+  return (
+    <span
+      title={isVeg ? "Vegetarian" : "Non-Vegetarian"}
+      className={`inline-flex items-center justify-center size-4 rounded-[3px] border-2 bg-white shrink-0 ${className}`}
+      style={{ borderColor: color }}
+    >
+      <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
+    </span>
+  );
+}
+
+function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button onClick={onClick} className={`w-full px-3 h-9 flex items-center gap-2 text-xs font-semibold hover:bg-muted ${danger ? "text-[#DC2626]" : "text-[#374151]"}`}>
+      {icon} {label}
+    </button>
+  );
+}
+
+function ViewDetailsModal({ d, onClose, onEdit, onMarkOut, onDelete }: {
+  d: Dish; onClose: () => void; onEdit: () => void; onMarkOut: () => void; onDelete: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-[#0D9488] text-white px-5 py-4 flex items-center justify-between">
+          <h2 className="text-base font-bold">Item Details</h2>
+          <button onClick={onClose} className="size-8 inline-flex items-center justify-center rounded hover:bg-white/10"><X className="size-4" /></button>
+        </div>
+        <div className="overflow-y-auto">
+          {!d.hide_image && (
+            <div className="h-44 bg-[#0D9488]/10 flex items-center justify-center">
+              {d.photo_url
+                ? <img src={d.photo_url} alt={d.name} className="size-full object-cover" />
+                : <UtensilsCrossed className="size-12 text-[#0D9488]" />}
+            </div>
+          )}
+          <div className="p-6 text-center border-b border-border">
+            <div className="flex items-center justify-center gap-2">
+              <VegMark isVeg={d.is_veg} />
+              <h3 className="text-lg font-bold text-[#111827]">{d.name}</h3>
+            </div>
+            <div className="text-3xl font-extrabold text-[#DC2626] tabular-nums mt-2">{formatINR(d.price)}</div>
+            <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3">
+              <Pill color={d.is_available ? "#16A34A" : "#DC2626"}>{d.is_available ? "Available" : "Out of stock"}</Pill>
+              <Pill color="#0D9488">{d.category}</Pill>
+              <Pill color={d.is_veg ? "#16A34A" : "#DC2626"}>{d.is_veg ? "Veg" : "Non-Veg"}</Pill>
+              {d.is_featured && <Pill color="#F59E0B">Featured</Pill>}
+            </div>
+          </div>
+          <div className="p-5 space-y-2 text-sm">
+            {d.description && <p className="text-muted-foreground">{d.description}</p>}
+            <Row label="Short code" value={d.short_code || "—"} />
+            <Row label="HSN / SAC" value={d.hsn_code || "—"} />
+            <Row label="Tax pricing" value={d.tax_pricing === "inclusive" ? "Tax inclusive" : d.tax_pricing === "exclusive" ? "Tax exclusive" : "Follow restaurant setting"} />
+          </div>
+        </div>
+        <div className="flex gap-2 px-5 py-4 border-t bg-gray-50">
+          <button onClick={onEdit} className="flex-1 h-11 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-sm font-semibold inline-flex items-center justify-center gap-2"><Pencil className="size-4" /> Edit</button>
+          <button onClick={onMarkOut} className="flex-1 h-11 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold">{d.is_available ? "Mark out of stock" : "Mark available"}</button>
+          <button onClick={onDelete} className="h-11 px-3 rounded-md border border-[#DC2626] text-[#DC2626] text-sm font-semibold"><Trash2 className="size-4" /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Pill({ children, color }: { children: React.ReactNode; color: string }) {
+  return <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ color, backgroundColor: `${color}1A` }}>{children}</span>;
+}
+function Row({ label, value }: { label: string; value: string }) {
+  return <div className="flex items-center justify-between border-b border-border/60 py-1.5"><span className="text-xs text-muted-foreground">{label}</span><span className="text-xs font-semibold text-[#111827]">{value}</span></div>;
 }
 
 function IconBtn({ children, onClick, title, className = "" }: { children: React.ReactNode; onClick?: () => void; title: string; className?: string }) {
@@ -247,7 +395,17 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
     price: initial.price ?? 0,
     is_available: initial.is_available ?? true,
     photo_url: initial.photo_url ?? "",
+    is_veg: initial.is_veg ?? true,
+    short_code: initial.short_code ?? "",
+    hsn_code: initial.hsn_code ?? "",
+    tax_pricing: initial.tax_pricing ?? "follow_restaurant",
   });
+  const [variants, setVariants] = useState<{ name: string; price: number }[]>(
+    Array.isArray(initial.variants) ? (initial.variants as { name: string; price: number }[]) : [],
+  );
+  const [modifiers, setModifiers] = useState<{ name: string; price: number }[]>(
+    Array.isArray(initial.modifier_groups) ? (initial.modifier_groups as { name: string; price: number }[]) : [],
+  );
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -264,7 +422,15 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
     }
     if (!restaurantId) { toast.error("No restaurant configured"); setSaving(false); return; }
 
-    const payload = { ...form, price: Number(form.price), restaurant_id: restaurantId };
+    const payload = {
+      ...form,
+      short_code: form.short_code || null,
+      hsn_code: form.hsn_code || null,
+      price: Number(form.price),
+      restaurant_id: restaurantId,
+      variants: variants.filter((v) => v.name.trim()),
+      modifier_groups: modifiers.filter((m) => m.name.trim()),
+    };
     const { error } = initial.id
       ? await supabase.from("dishes").update(payload).eq("id", initial.id)
       : await supabase.from("dishes").insert(payload);
@@ -282,9 +448,33 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
         </div>
         <div className="p-6 space-y-4 overflow-y-auto">
           <Field label="Dish name *"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+          <Field label="Food type">
+            <div className="flex gap-2">
+              {[{ v: true, l: "Veg", c: "#16A34A" }, { v: false, l: "Non-Veg", c: "#DC2626" }].map((o) => (
+                <button key={o.l} type="button" onClick={() => setForm({ ...form, is_veg: o.v })}
+                  className="flex-1 h-10 rounded-md border-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
+                  style={form.is_veg === o.v ? { borderColor: o.c, color: o.c, backgroundColor: `${o.c}12` } : { borderColor: "#E5E7EB", color: "#6B7280" }}>
+                  <VegMark isVeg={o.v} /> {o.l}
+                </button>
+              ))}
+            </div>
+          </Field>
           <Field label="Category *"><input className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Rice Items" /></Field>
           <Field label="Description"><textarea className="input min-h-[80px]" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
           <Field label="Price (₹) *"><input type="number" className="input" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Short code"><input className="input" value={form.short_code} onChange={(e) => setForm({ ...form, short_code: e.target.value })} placeholder="e.g. CB01" /></Field>
+            <Field label="HSN / SAC code"><input className="input" value={form.hsn_code} onChange={(e) => setForm({ ...form, hsn_code: e.target.value })} placeholder="e.g. 996331" /></Field>
+          </div>
+          <Field label="Tax pricing">
+            <select className="input" value={form.tax_pricing} onChange={(e) => setForm({ ...form, tax_pricing: e.target.value })}>
+              <option value="follow_restaurant">Follow restaurant setting</option>
+              <option value="inclusive">Tax inclusive</option>
+              <option value="exclusive">Tax exclusive</option>
+            </select>
+          </Field>
+          <RowEditor title="Variants" hint="e.g. Half / Full" rows={variants} setRows={setVariants} />
+          <RowEditor title="Modifiers / Add-ons" hint="e.g. Extra cheese" rows={modifiers} setRows={setModifiers} />
           <Field label="Photo URL"><input className="input" value={form.photo_url} onChange={(e) => setForm({ ...form, photo_url: e.target.value })} placeholder="https://..." /></Field>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.is_available} onChange={(e) => setForm({ ...form, is_available: e.target.checked })} />
@@ -297,7 +487,7 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
         </div>
         <div className="flex gap-2 px-6 py-4 border-t bg-gray-50">
           <button onClick={onClose} className="flex-1 h-11 rounded-md border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="flex-1 h-11 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Saving..." : "Add Dish"}</button>
+          <button onClick={save} disabled={saving} className="flex-1 h-11 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Saving..." : initial.id ? "Save Changes" : "Add Dish"}</button>
         </div>
       </div>
       <style>{`.input { width: 100%; height: 38px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--input); background: var(--background); font-size: 14px; } textarea.input { padding: 8px 12px; height: auto; }`}</style>
@@ -307,6 +497,38 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><div className="text-xs font-semibold text-muted-foreground mb-1">{label}</div>{children}</div>;
+}
+
+function RowEditor({ title, hint, rows, setRows }: {
+  title: string; hint: string;
+  rows: { name: string; price: number }[];
+  setRows: React.Dispatch<React.SetStateAction<{ name: string; price: number }[]>>;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-xs font-semibold text-muted-foreground">{title}</div>
+        <button type="button" onClick={() => setRows((r) => [...r, { name: "", price: 0 }])}
+          className="text-xs font-semibold text-[#0D9488] inline-flex items-center gap-1"><Plus className="size-3.5" /> Add</button>
+      </div>
+      {rows.length === 0 ? (
+        <div className="text-[11px] text-muted-foreground bg-muted rounded-md px-3 py-2">None yet — {hint}</div>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((r, i) => (
+            <div key={i} className="flex gap-2">
+              <input className="input flex-1" placeholder={hint} value={r.name}
+                onChange={(e) => setRows((list) => list.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
+              <input type="number" className="input w-24" placeholder="₹" value={r.price}
+                onChange={(e) => setRows((list) => list.map((x, j) => j === i ? { ...x, price: Number(e.target.value) } : x))} />
+              <button type="button" onClick={() => setRows((list) => list.filter((_, j) => j !== i))}
+                className="size-9 shrink-0 inline-flex items-center justify-center rounded-md border border-border text-[#DC2626]"><X className="size-4" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 function CustomizeOverlay({ dishes, onClose }: { dishes: Dish[]; onClose: () => void }) {
   const themes = [
