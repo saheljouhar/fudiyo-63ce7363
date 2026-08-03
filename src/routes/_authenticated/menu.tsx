@@ -41,6 +41,7 @@ function MenuPage() {
   const [showQr, setShowQr] = useState(false);
   const [showCustomize, setShowCustomize] = useState(false);
   const [editing, setEditing] = useState<Partial<Dish> | null>(null);
+  const [viewing, setViewing] = useState<Dish | null>(null);
 
   const load = async () => {
     const { data } = await supabase.from("dishes").select("*").eq("is_archived", false).order("category").order("display_order");
@@ -84,6 +85,18 @@ function MenuPage() {
     const { error } = await supabase.from("dishes").update({ is_archived: true }).eq("id", d.id);
     if (error) toast.error(error.message);
     else toast.success("Dish removed");
+  };
+
+  const toggleHideImage = async (d: Dish) => {
+    const { error } = await supabase.from("dishes").update({ hide_image: !d.hide_image }).eq("id", d.id);
+    if (error) toast.error(error.message);
+    else toast.success(d.hide_image ? "Image shown" : "Image hidden");
+  };
+
+  const toggleFeatured = async (d: Dish) => {
+    const { error } = await supabase.from("dishes").update({ is_featured: !d.is_featured }).eq("id", d.id);
+    if (error) toast.error(error.message);
+    else toast.success(d.is_featured ? "Removed from favorites" : "Added to favorites");
   };
 
   return (
@@ -142,12 +155,33 @@ function MenuPage() {
       ) : (
         <div className={view === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "flex flex-col gap-2"}>
           {visible.map((d, i) => (
-            <DishCard key={d.id} d={d} index={i + 1} hideImage={hideImages} onEdit={() => setEditing(d)} onDup={() => duplicate(d)} onDel={() => del(d)} onToggle={() => toggleAvail(d)} />
+            <DishCard
+              key={d.id}
+              d={d}
+              index={i + 1}
+              hideImage={hideImages || d.hide_image}
+              onEdit={() => setEditing(d)}
+              onDup={() => duplicate(d)}
+              onDel={() => del(d)}
+              onToggle={() => toggleAvail(d)}
+              onView={() => setViewing(d)}
+              onHideImage={() => toggleHideImage(d)}
+              onFavorite={() => toggleFeatured(d)}
+            />
           ))}
         </div>
       )}
 
       {editing && <DishDrawer initial={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+      {viewing && (
+        <ViewDetailsModal
+          d={viewing}
+          onClose={() => setViewing(null)}
+          onEdit={() => { setEditing(viewing); setViewing(null); }}
+          onMarkOut={async () => { await toggleAvail(viewing); setViewing(null); }}
+          onDelete={async () => { await del(viewing); setViewing(null); }}
+        />
+      )}
       {showQr && <QrModal onClose={() => setShowQr(false)} />}
       {showCustomize && <CustomizeOverlay dishes={dishes} onClose={() => setShowCustomize(false)} />}
     </main>
