@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { formatINR } from "@/lib/format";
-import { Plus, Pencil, Trash2, Copy, Search, Camera, Eye, Star, Upload, QrCode, Image as ImageIcon, ImageOff, LayoutGrid, List, X, Download, MoreHorizontal, EyeOff, Sparkles, UtensilsCrossed } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, Search, Camera, Eye, Star, Upload, QrCode, Image as ImageIcon, ImageOff, LayoutGrid, List, X, Download, MoreHorizontal, EyeOff, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/menu")({
