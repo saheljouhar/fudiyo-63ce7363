@@ -388,6 +388,7 @@ function OrdersPage() {
         notifSound={notifSound}
         setNotifSound={setNotifSound}
         onPrinter={() => setPrinterOpen(true)}
+        onResetTables={() => setConfirmReset(true)}
       />
       {printerOpen && <PrinterSetupModal onClose={() => setPrinterOpen(false)} />}
       <div className="flex bg-[#F9FAFB]" style={{ height: "calc(100vh - 56px)" }}>
