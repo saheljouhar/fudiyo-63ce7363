@@ -395,7 +395,17 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
     price: initial.price ?? 0,
     is_available: initial.is_available ?? true,
     photo_url: initial.photo_url ?? "",
+    is_veg: initial.is_veg ?? true,
+    short_code: initial.short_code ?? "",
+    hsn_code: initial.hsn_code ?? "",
+    tax_pricing: initial.tax_pricing ?? "follow_restaurant",
   });
+  const [variants, setVariants] = useState<{ name: string; price: number }[]>(
+    Array.isArray(initial.variants) ? (initial.variants as { name: string; price: number }[]) : [],
+  );
+  const [modifiers, setModifiers] = useState<{ name: string; price: number }[]>(
+    Array.isArray(initial.modifier_groups) ? (initial.modifier_groups as { name: string; price: number }[]) : [],
+  );
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -412,7 +422,15 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
     }
     if (!restaurantId) { toast.error("No restaurant configured"); setSaving(false); return; }
 
-    const payload = { ...form, price: Number(form.price), restaurant_id: restaurantId };
+    const payload = {
+      ...form,
+      short_code: form.short_code || null,
+      hsn_code: form.hsn_code || null,
+      price: Number(form.price),
+      restaurant_id: restaurantId,
+      variants: variants.filter((v) => v.name.trim()),
+      modifier_groups: modifiers.filter((m) => m.name.trim()),
+    };
     const { error } = initial.id
       ? await supabase.from("dishes").update(payload).eq("id", initial.id)
       : await supabase.from("dishes").insert(payload);
@@ -430,9 +448,33 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
         </div>
         <div className="p-6 space-y-4 overflow-y-auto">
           <Field label="Dish name *"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+          <Field label="Food type">
+            <div className="flex gap-2">
+              {[{ v: true, l: "Veg", c: "#16A34A" }, { v: false, l: "Non-Veg", c: "#DC2626" }].map((o) => (
+                <button key={o.l} type="button" onClick={() => setForm({ ...form, is_veg: o.v })}
+                  className="flex-1 h-10 rounded-md border-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
+                  style={form.is_veg === o.v ? { borderColor: o.c, color: o.c, backgroundColor: `${o.c}12` } : { borderColor: "#E5E7EB", color: "#6B7280" }}>
+                  <VegMark isVeg={o.v} /> {o.l}
+                </button>
+              ))}
+            </div>
+          </Field>
           <Field label="Category *"><input className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Rice Items" /></Field>
           <Field label="Description"><textarea className="input min-h-[80px]" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
           <Field label="Price (₹) *"><input type="number" className="input" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Short code"><input className="input" value={form.short_code} onChange={(e) => setForm({ ...form, short_code: e.target.value })} placeholder="e.g. CB01" /></Field>
+            <Field label="HSN / SAC code"><input className="input" value={form.hsn_code} onChange={(e) => setForm({ ...form, hsn_code: e.target.value })} placeholder="e.g. 996331" /></Field>
+          </div>
+          <Field label="Tax pricing">
+            <select className="input" value={form.tax_pricing} onChange={(e) => setForm({ ...form, tax_pricing: e.target.value })}>
+              <option value="follow_restaurant">Follow restaurant setting</option>
+              <option value="inclusive">Tax inclusive</option>
+              <option value="exclusive">Tax exclusive</option>
+            </select>
+          </Field>
+          <RowEditor title="Variants" hint="e.g. Half / Full" rows={variants} setRows={setVariants} />
+          <RowEditor title="Modifiers / Add-ons" hint="e.g. Extra cheese" rows={modifiers} setRows={setModifiers} />
           <Field label="Photo URL"><input className="input" value={form.photo_url} onChange={(e) => setForm({ ...form, photo_url: e.target.value })} placeholder="https://..." /></Field>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.is_available} onChange={(e) => setForm({ ...form, is_available: e.target.checked })} />
@@ -445,7 +487,7 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
         </div>
         <div className="flex gap-2 px-6 py-4 border-t bg-gray-50">
           <button onClick={onClose} className="flex-1 h-11 rounded-md border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="flex-1 h-11 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Saving..." : "Add Dish"}</button>
+          <button onClick={save} disabled={saving} className="flex-1 h-11 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Saving..." : initial.id ? "Save Changes" : "Add Dish"}</button>
         </div>
       </div>
       <style>{`.input { width: 100%; height: 38px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--input); background: var(--background); font-size: 14px; } textarea.input { padding: 8px 12px; height: auto; }`}</style>
