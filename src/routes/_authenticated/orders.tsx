@@ -218,7 +218,9 @@ function OrdersPage() {
     if (cart.length === 0) return toast.error("Cart is empty");
     const at = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
     const id = `s_${Date.now()}`;
-    setSaved((s) => [...s, { id, label: `Cart - ${at}`, cart, orderType, at, code: orderCode }]);
+    const label = servingTable ? `T${servingTable.number} - ${at}` : `Cart - ${at}`;
+    setSaved((s) => [...s.filter((x) => x.id !== activeSavedId), { id, label, cart, orderType, at, code: orderCode }]);
+    setActiveSavedId(null);
     setCart([]);
     toast.success(`Order saved at ${at}`);
   };
@@ -226,9 +228,31 @@ function OrdersPage() {
   const loadSaved = (s: SavedCart) => {
     setCart(s.cart); setOrderType(s.orderType);
     if (s.code) { setOrderCode(s.code); localStorage.setItem(LS_CODE, s.code); }
-    setSaved((arr) => arr.filter((x) => x.id !== s.id));
+    setActiveSavedId(s.id);
   };
-  const removeSaved = (id: string) => setSaved((arr) => arr.filter((x) => x.id !== id));
+  const removeSaved = (id: string) => {
+    setSaved((arr) => arr.filter((x) => x.id !== id));
+    setActiveSavedId((c) => (c === id ? null : c));
+  };
+
+  const occupiedTables = useMemo(() => {
+    const withOrders = new Set(activeOrders.map((o) => o.table_id).filter(Boolean) as string[]);
+    return tablesData.filter((t) => t.status === "occupied" || withOrders.has(t.id));
+  }, [tablesData, activeOrders]);
+
+  const doResetAllTables = async () => {
+    const ids = occupiedTables.map((t) => t.id);
+    setConfirmReset(false);
+    if (ids.length === 0) return toast.info("No occupied tables");
+    const { error } = await supabase.from("tables").update({ status: "available", occupied_since: null }).in("id", ids);
+    if (error) return toast.error(error.message);
+    await supabase.from("orders").update({ table_id: null })
+      .in("table_id", ids).in("status", ["pending", "cooking", "ready"]);
+    setServingTable(null);
+    setJustTaken([]);
+    await refreshTables();
+    toast.success(`${ids.length} table${ids.length > 1 ? "s" : ""} reset to available`);
+  };
 
   const newOrder = async () => {
     setCart([]); setMobile(""); setCustName(""); setTableNo(tableNum);
