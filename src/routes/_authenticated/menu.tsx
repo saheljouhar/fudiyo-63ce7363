@@ -498,6 +498,38 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><div className="text-xs font-semibold text-muted-foreground mb-1">{label}</div>{children}</div>;
 }
+
+function RowEditor({ title, hint, rows, setRows }: {
+  title: string; hint: string;
+  rows: { name: string; price: number }[];
+  setRows: React.Dispatch<React.SetStateAction<{ name: string; price: number }[]>>;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-xs font-semibold text-muted-foreground">{title}</div>
+        <button type="button" onClick={() => setRows((r) => [...r, { name: "", price: 0 }])}
+          className="text-xs font-semibold text-[#0D9488] inline-flex items-center gap-1"><Plus className="size-3.5" /> Add</button>
+      </div>
+      {rows.length === 0 ? (
+        <div className="text-[11px] text-muted-foreground bg-muted rounded-md px-3 py-2">None yet — {hint}</div>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((r, i) => (
+            <div key={i} className="flex gap-2">
+              <input className="input flex-1" placeholder={hint} value={r.name}
+                onChange={(e) => setRows((list) => list.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
+              <input type="number" className="input w-24" placeholder="₹" value={r.price}
+                onChange={(e) => setRows((list) => list.map((x, j) => j === i ? { ...x, price: Number(e.target.value) } : x))} />
+              <button type="button" onClick={() => setRows((list) => list.filter((_, j) => j !== i))}
+                className="size-9 shrink-0 inline-flex items-center justify-center rounded-md border border-border text-[#DC2626]"><X className="size-4" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 function CustomizeOverlay({ dishes, onClose }: { dishes: Dish[]; onClose: () => void }) {
   const themes = [
     { id: "default", name: "Default", desc: "Classic menu layout" },
