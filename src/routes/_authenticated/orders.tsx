@@ -924,7 +924,7 @@ function TablesPreview({
           })}
         </div>
       ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(184px, 1fr))" }}>
+        <div className="grid gap-3 items-start" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(184px, 1fr))" }}>
           {tables.map((t) => {
             const list = byTable[t.id] ?? [];
             const occupied = t.status === "occupied" || list.length > 0;
