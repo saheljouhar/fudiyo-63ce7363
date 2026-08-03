@@ -331,6 +331,7 @@ function OrdersPage() {
       // Order completed — clear code so next view gets new ID
       localStorage.removeItem(LS_CODE);
       if (servingTable) setServingTable(null);
+      if (activeSavedId) { removeSaved(activeSavedId); }
     }
     if (kind === "kot" && activeTableId) {
       setJustTaken((v) => (v.includes(activeTableId) ? v : [...v, activeTableId]));
