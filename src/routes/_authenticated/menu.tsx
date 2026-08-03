@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { formatINR } from "@/lib/format";
-import { Plus, Pencil, Trash2, Copy, Search, Camera, Eye, Star, Upload, QrCode, Image as ImageIcon, ImageOff, LayoutGrid, List, X, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, Search, Camera, Eye, Star, Upload, QrCode, Image as ImageIcon, ImageOff, LayoutGrid, List, X, Download, MoreHorizontal, EyeOff, Sparkles, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/menu")({
@@ -21,6 +21,14 @@ interface Dish {
   is_featured: boolean;
   photo_url: string | null;
   restaurant_id: string;
+  is_veg: boolean;
+  short_code: string | null;
+  hsn_code: string | null;
+  tax_pricing: string | null;
+  hide_image: boolean;
+  images: unknown;
+  variants: unknown;
+  modifier_groups: unknown;
 }
 
 function MenuPage() {
