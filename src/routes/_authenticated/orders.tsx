@@ -89,10 +89,13 @@ function OrdersPage() {
   const [gridMode, setGridMode] = useState<GridMode>(() => (typeof window !== "undefined" ? (localStorage.getItem(LS_GRID) as GridMode) || "standard" : "standard"));
   const [topBarMode, setTopBarMode] = useState<boolean>(() => (typeof window !== "undefined" ? localStorage.getItem(LS_TOPBAR) === "1" : false));
   const [gridOpen, setGridOpen] = useState(false);
-  const [saved, setSaved] = useState<SavedCart[]>(() => {
-    if (typeof window === "undefined") return [];
-    try { return JSON.parse(localStorage.getItem(LS_SAVED) || "[]"); } catch { return []; }
-  });
+  const [saved, setSaved] = useState<SavedCart[]>([]);
+  const savedLoaded = useRef(false);
+  useEffect(() => {
+    try { setSaved(JSON.parse(localStorage.getItem(LS_SAVED) || "[]")); } catch { /* ignore */ }
+    savedLoaded.current = true;
+  }, []);
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [noteFor, setNoteFor] = useState<CartItem | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [post, setPost] = useState<PostState>({ kind: "none" });
@@ -113,6 +116,7 @@ function OrdersPage() {
   const [notifSound, setNotifSound] = useState<boolean>(() => (typeof window !== "undefined" ? localStorage.getItem(LS_SOUND) !== "0" : true));
   useEffect(() => { localStorage.setItem(LS_SOUND, notifSound ? "1" : "0"); }, [notifSound]);
   const [confirmNew, setConfirmNew] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [lookup, setLookup] = useState("");
   const [printerOpen, setPrinterOpen] = useState(false);
 
@@ -121,7 +125,7 @@ function OrdersPage() {
 
   useEffect(() => { localStorage.setItem(LS_GRID, gridMode); }, [gridMode]);
   useEffect(() => { localStorage.setItem(LS_TOPBAR, topBarMode ? "1" : "0"); }, [topBarMode]);
-  useEffect(() => { localStorage.setItem(LS_SAVED, JSON.stringify(saved)); }, [saved]);
+  useEffect(() => { if (savedLoaded.current) localStorage.setItem(LS_SAVED, JSON.stringify(saved)); }, [saved]);
   useEffect(() => { setTableNo(tableNum); }, [tableNum]);
 
   useEffect(() => {
