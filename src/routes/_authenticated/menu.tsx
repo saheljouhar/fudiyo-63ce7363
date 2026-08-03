@@ -237,7 +237,12 @@ function QrModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function DishCard({ d, index, hideImage, onEdit, onDup, onDel, onToggle }: { d: Dish; index: number; hideImage?: boolean; onEdit: () => void; onDup: () => void; onDel: () => void; onToggle: () => void }) {
+function DishCard({ d, index, hideImage, onEdit, onDup, onDel, onToggle, onView, onHideImage, onFavorite }: {
+  d: Dish; index: number; hideImage?: boolean;
+  onEdit: () => void; onDup: () => void; onDel: () => void; onToggle: () => void;
+  onView: () => void; onHideImage: () => void; onFavorite: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div className={`rounded-xl border border-border bg-card overflow-hidden shadow-card transition ${!d.is_available ? "opacity-70" : ""}`}>
       {!hideImage && (
@@ -247,30 +252,131 @@ function DishCard({ d, index, hideImage, onEdit, onDup, onDel, onToggle }: { d: 
           ) : (
             <div className="text-[#0D9488] text-5xl font-bold">{d.name[0]?.toUpperCase()}</div>
           )}
-          <span className="absolute top-2 left-2 size-3.5 rounded-full bg-[#16A34A] border-2 border-white shadow" title="Vegetarian" />
+          <VegMark isVeg={d.is_veg} className="absolute top-2 left-2" />
+          {!d.is_available && (
+            <span className="absolute top-2 right-2 text-[10px] font-bold bg-[#DC2626] text-white px-2 py-0.5 rounded-full">Out of stock</span>
+          )}
+          {d.is_featured && (
+            <span className="absolute bottom-2 left-2 text-[10px] font-bold bg-[#F59E0B] text-white px-2 py-0.5 rounded-full inline-flex items-center gap-1"><Star className="size-3" /> Featured</span>
+          )}
           <span className="absolute bottom-2 right-2 text-[10px] font-bold bg-black/70 text-white px-2 py-0.5 rounded-full">#{index}</span>
         </div>
       )}
       <div className="p-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="font-semibold text-[16px] leading-tight">{d.name}</div>
+          <div className="font-semibold text-[16px] leading-tight flex items-center gap-1.5">
+            {hideImage && <VegMark isVeg={d.is_veg} />}
+            {d.name}
+          </div>
           <div className="text-base font-bold text-[#0D9488] tabular-nums">{formatINR(d.price)}</div>
         </div>
-        <div className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded inline-block mt-1.5">{d.category}</div>
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded">{d.category}</span>
+          {d.short_code && <span className="text-[11px] font-semibold text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded">{d.short_code}</span>}
+        </div>
         {d.description && <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{d.description}</div>}
-        <div className="flex items-center justify-between mt-3 gap-1">
-          <IconBtn title="Edit" onClick={onEdit} className="text-[#2563EB]"><Pencil className="size-4" /></IconBtn>
-          <IconBtn title="Hide" onClick={onToggle} className={d.is_available ? "text-[#F59E0B]" : "text-[#16A34A]"}>
-            <span className={`size-3 rounded-full ${d.is_available ? "bg-[#F59E0B]" : "bg-[#16A34A]"}`} />
-          </IconBtn>
-          <IconBtn title="Hide Image" className="text-[#7C3AED]"><ImageOff className="size-4" /></IconBtn>
-          <IconBtn title="Duplicate" onClick={onDup} className="text-[#16A34A]"><Copy className="size-4" /></IconBtn>
-          <IconBtn title="Feature"><Star className="size-4" /></IconBtn>
-          <IconBtn title="Delete" onClick={onDel} className="text-[#DC2626]"><Trash2 className="size-4" /></IconBtn>
+        <div className="flex items-center gap-1.5 mt-3">
+          <button onClick={onEdit} className="flex-1 h-9 rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5">
+            <Pencil className="size-3.5" /> Edit
+          </button>
+          <button onClick={onToggle} className={`flex-1 h-9 rounded-lg text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 ${d.is_available ? "bg-[#F59E0B] hover:bg-[#D97706]" : "bg-[#16A34A] hover:bg-[#15803D]"}`}>
+            {d.is_available ? <><EyeOff className="size-3.5" /> Hide</> : <><Eye className="size-3.5" /> Show</>}
+          </button>
+          <IconBtn title="View details" onClick={onView} className="text-[#0D9488] border border-border size-9"><Eye className="size-4" /></IconBtn>
+          <div className="relative">
+            <IconBtn title="More" onClick={() => setMenuOpen((v) => !v)} className="text-muted-foreground border border-border size-9"><MoreHorizontal className="size-4" /></IconBtn>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 bottom-full mb-1 z-40 w-[176px] bg-white rounded-xl border border-border shadow-lg py-1">
+                  <MenuItem icon={<ImageOff className="size-4 text-[#7C3AED]" />} label={d.hide_image ? "Show image" : "Hide image"} onClick={() => { setMenuOpen(false); onHideImage(); }} />
+                  <MenuItem icon={<Copy className="size-4 text-[#16A34A]" />} label="Duplicate" onClick={() => { setMenuOpen(false); onDup(); }} />
+                  <MenuItem icon={<Star className="size-4 text-[#F59E0B]" />} label={d.is_featured ? "Unfavorite" : "Mark favorite"} onClick={() => { setMenuOpen(false); onFavorite(); }} />
+                  <MenuItem icon={<Trash2 className="size-4 text-[#DC2626]" />} label="Delete" onClick={() => { setMenuOpen(false); onDel(); }} danger />
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function VegMark({ isVeg, className = "" }: { isVeg: boolean; className?: string }) {
+  const color = isVeg ? "#16A34A" : "#DC2626";
+  return (
+    <span
+      title={isVeg ? "Vegetarian" : "Non-Vegetarian"}
+      className={`inline-flex items-center justify-center size-4 rounded-[3px] border-2 bg-white shrink-0 ${className}`}
+      style={{ borderColor: color }}
+    >
+      <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
+    </span>
+  );
+}
+
+function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button onClick={onClick} className={`w-full px-3 h-9 flex items-center gap-2 text-xs font-semibold hover:bg-muted ${danger ? "text-[#DC2626]" : "text-[#374151]"}`}>
+      {icon} {label}
+    </button>
+  );
+}
+
+function ViewDetailsModal({ d, onClose, onEdit, onMarkOut, onDelete }: {
+  d: Dish; onClose: () => void; onEdit: () => void; onMarkOut: () => void; onDelete: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-[#0D9488] text-white px-5 py-4 flex items-center justify-between">
+          <h2 className="text-base font-bold">Item Details</h2>
+          <button onClick={onClose} className="size-8 inline-flex items-center justify-center rounded hover:bg-white/10"><X className="size-4" /></button>
+        </div>
+        <div className="overflow-y-auto">
+          {!d.hide_image && (
+            <div className="h-44 bg-[#0D9488]/10 flex items-center justify-center">
+              {d.photo_url
+                ? <img src={d.photo_url} alt={d.name} className="size-full object-cover" />
+                : <UtensilsCrossed className="size-12 text-[#0D9488]" />}
+            </div>
+          )}
+          <div className="p-6 text-center border-b border-border">
+            <div className="flex items-center justify-center gap-2">
+              <VegMark isVeg={d.is_veg} />
+              <h3 className="text-lg font-bold text-[#111827]">{d.name}</h3>
+            </div>
+            <div className="text-3xl font-extrabold text-[#DC2626] tabular-nums mt-2">{formatINR(d.price)}</div>
+            <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3">
+              <Pill color={d.is_available ? "#16A34A" : "#DC2626"}>{d.is_available ? "Available" : "Out of stock"}</Pill>
+              <Pill color="#0D9488">{d.category}</Pill>
+              <Pill color={d.is_veg ? "#16A34A" : "#DC2626"}>{d.is_veg ? "Veg" : "Non-Veg"}</Pill>
+              {d.is_featured && <Pill color="#F59E0B">Featured</Pill>}
+            </div>
+          </div>
+          <div className="p-5 space-y-2 text-sm">
+            {d.description && <p className="text-muted-foreground">{d.description}</p>}
+            <Row label="Short code" value={d.short_code || "—"} />
+            <Row label="HSN / SAC" value={d.hsn_code || "—"} />
+            <Row label="Tax pricing" value={d.tax_pricing === "inclusive" ? "Tax inclusive" : d.tax_pricing === "exclusive" ? "Tax exclusive" : "Follow restaurant setting"} />
+          </div>
+        </div>
+        <div className="flex gap-2 px-5 py-4 border-t bg-gray-50">
+          <button onClick={onEdit} className="flex-1 h-11 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-sm font-semibold inline-flex items-center justify-center gap-2"><Pencil className="size-4" /> Edit</button>
+          <button onClick={onMarkOut} className="flex-1 h-11 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold">{d.is_available ? "Mark out of stock" : "Mark available"}</button>
+          <button onClick={onDelete} className="h-11 px-3 rounded-md border border-[#DC2626] text-[#DC2626] text-sm font-semibold"><Trash2 className="size-4" /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Pill({ children, color }: { children: React.ReactNode; color: string }) {
+  return <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ color, backgroundColor: `${color}1A` }}>{children}</span>;
+}
+function Row({ label, value }: { label: string; value: string }) {
+  return <div className="flex items-center justify-between border-b border-border/60 py-1.5"><span className="text-xs text-muted-foreground">{label}</span><span className="text-xs font-semibold text-[#111827]">{value}</span></div>;
 }
 
 function IconBtn({ children, onClick, title, className = "" }: { children: React.ReactNode; onClick?: () => void; title: string; className?: string }) {
