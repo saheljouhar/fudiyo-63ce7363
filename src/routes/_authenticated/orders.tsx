@@ -748,7 +748,7 @@ function OrdersPage() {
 function TopNav({
   toggleSidebar, search, setSearch, tableNum, orderCode, onNewOrder,
   lookup, setLookup, onLookup, showTables, setShowTables,
-  notifOpen, setNotifOpen, notifSound, setNotifSound, onPrinter,
+  notifOpen, setNotifOpen, notifSound, setNotifSound, onPrinter, onResetTables,
 }: {
   toggleSidebar: () => void; search: string; setSearch: (s: string) => void; tableNum: string;
   orderCode: string; onNewOrder: () => void;
@@ -756,7 +756,7 @@ function TopNav({
   showTables: boolean; setShowTables: (b: boolean) => void;
   notifOpen: boolean; setNotifOpen: (b: boolean) => void;
   notifSound: boolean; setNotifSound: (b: boolean) => void;
-  onPrinter: () => void;
+  onPrinter: () => void; onResetTables: () => void;
 }) {
   const items = [
     { key: "alerts", icon: Bell, label: "Alerts", active: notifOpen, onClick: () => setNotifOpen(!notifOpen) },
@@ -788,7 +788,7 @@ function TopNav({
         {showTables ? <><ClipboardList className="size-4" /> ORDERS</> : <><Armchair className="size-4" /> {tableNum ? `T${tableNum}` : "TABLES"}</>}
       </button>
       {showTables && (
-        <button onClick={() => setShowTables(false)} className="h-9 px-2 rounded-lg border border-[#0D9488] text-[#0D9488] text-[13px] font-semibold inline-flex items-center gap-1"><RotateCw className="size-3.5" /> Reset</button>
+        <button onClick={onResetTables} className="h-9 px-2 rounded-lg border border-[#DC2626] text-[#DC2626] text-[13px] font-semibold inline-flex items-center gap-1 hover:bg-[#FEF2F2]"><RotateCw className="size-3.5" /> Reset</button>
       )}
       <div className="ml-auto flex items-center">
         {items.map(({ key, icon: Icon, label, active, to, onClick }) => {
