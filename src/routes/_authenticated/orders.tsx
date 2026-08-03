@@ -866,6 +866,7 @@ function TablesPreview({
     for (const o of orders) if (o.table_id) (m[o.table_id] ||= []).push(o);
     return m;
   }, [orders]);
+  const [mapOpen, setMapOpen] = useState<string | null>(null);
 
   return (
     <section className="flex-1 min-w-0 overflow-y-auto p-6">
@@ -896,11 +897,28 @@ function TablesPreview({
             const occupied = t.status === "occupied" || list.length > 0;
             const tot = list.reduce((s, o) => s + Number(o.total ?? 0), 0);
             return (
-              <div key={t.id}
-                className={`rounded-lg h-[76px] flex flex-col items-center justify-center border ${occupied ? "bg-[#FFFBEB] border-[#F59E0B]" : "bg-[#F0FDF4] border-[#16A34A]"}`}>
-                <span className="text-[16px] font-bold text-[#111827]">T{t.number}</span>
-                <span className="text-[11px] text-[#6B7280]">{t.seats} seats</span>
-                {occupied && tot > 0 && <span className="text-[12px] font-bold text-[#B45309]">{formatINR(tot)}</span>}
+              <div key={t.id} className="relative">
+                <button
+                  onClick={() => (occupied ? setMapOpen((v) => (v === t.id ? null : t.id)) : onPick(t))}
+                  className={`w-full rounded-lg h-[76px] flex flex-col items-center justify-center border transition hover:shadow-md ${occupied ? "bg-[#FFFBEB] border-[#F59E0B]" : "bg-[#F0FDF4] border-[#16A34A]"}`}>
+                  <span className="text-[16px] font-bold text-[#111827]">T{t.number}</span>
+                  <span className="text-[11px] text-[#6B7280]">{t.seats} seats</span>
+                  {occupied && tot > 0 && <span className="text-[12px] font-bold text-[#B45309]">{formatINR(tot)}</span>}
+                </button>
+                {mapOpen === t.id && occupied && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setMapOpen(null)} />
+                    <div className="absolute z-40 left-1/2 -translate-x-1/2 top-full mt-1 w-[168px] bg-white rounded-xl border border-[#E5E7EB] shadow-lg p-2 space-y-1.5">
+                      <div className="text-[12px] font-bold text-[#111827] px-1">Table {t.number}</div>
+                      <button onClick={() => { setMapOpen(null); onView(t); }} className="w-full h-8 rounded-lg border border-[#E5E7EB] text-[#0D9488] text-[12px] font-semibold inline-flex items-center justify-center gap-1"><Eye className="size-3.5" /> View details</button>
+                      <div className="grid grid-cols-3 gap-1">
+                        <button onClick={() => { setMapOpen(null); onAdd(t); }} className="h-8 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-semibold">Add</button>
+                        <button onClick={() => { setMapOpen(null); onAdd(t); }} className="h-8 rounded-lg bg-[#F59E0B] hover:bg-[#D97706] text-white text-[11px] font-semibold">Bill</button>
+                        <button onClick={() => { setMapOpen(null); window.print(); }} className="h-8 rounded-lg border border-[#E5E7EB] text-[#374151] text-[11px] font-semibold inline-flex items-center justify-center"><Printer className="size-3.5" /></button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
