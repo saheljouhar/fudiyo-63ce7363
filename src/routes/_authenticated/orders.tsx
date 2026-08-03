@@ -932,9 +932,12 @@ function TablesPreview({
             const since = list.length ? list[list.length - 1].created_at : null;
             const dot = occupied ? "bg-[#F59E0B]" : t.status === "available" ? "bg-[#16A34A]" : "bg-[#9CA3AF]";
             const big = justTaken.includes(t.id);
+            const bigItems = big
+              ? list.flatMap((o) => (Array.isArray(o.items) ? o.items : [])).filter((i) => i && i.name)
+              : [];
             return (
               <div key={t.id}
-                style={big ? { gridColumn: "span 2", gridRow: "span 2" } : undefined}
+                style={big ? { gridColumn: "span 2" } : undefined}
                 className={`bg-white rounded-xl p-3 flex flex-col gap-2 transition ${big ? "ring-2 ring-[#0D9488] shadow-lg text-[1.1em]" : ""} ${occupied ? "table-dash-occupied" : "border border-[#E5E7EB]"}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-[20px] font-bold text-[#111827]">T{t.number}</span>
@@ -972,6 +975,19 @@ function TablesPreview({
                         <Printer className="size-3.5" /> Print
                       </button>
                     </div>
+                    {big && bigItems.length > 0 && (
+                      <div className="mt-1 border-t border-[#F1F5F9] pt-2">
+                        <div className="text-[10px] uppercase font-bold text-[#9CA3AF] mb-1">Items</div>
+                        <div className="space-y-0.5">
+                          {bigItems.map((it, i) => (
+                            <div key={i} className="flex items-center justify-between text-[12px] text-[#374151]">
+                              <span className="truncate pr-2">{it.name}</span>
+                              <span className="font-semibold text-[#111827] shrink-0">× {it.qty}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <button onClick={() => onPick(t)} className="mt-1 w-full h-10 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white text-[13px] font-semibold inline-flex items-center justify-center gap-1">
