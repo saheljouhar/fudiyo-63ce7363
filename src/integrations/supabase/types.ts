@@ -219,42 +219,66 @@ export type Database = {
           created_at: string
           description: string | null
           display_order: number
+          hide_image: boolean
+          hsn_code: string | null
           id: string
+          images: Json
           is_archived: boolean
           is_available: boolean
           is_featured: boolean
+          is_veg: boolean
+          modifier_groups: Json
           name: string
           photo_url: string | null
           price: number
           restaurant_id: string
+          short_code: string | null
+          tax_pricing: string
+          variants: Json
         }
         Insert: {
           category: string
           created_at?: string
           description?: string | null
           display_order?: number
+          hide_image?: boolean
+          hsn_code?: string | null
           id?: string
+          images?: Json
           is_archived?: boolean
           is_available?: boolean
           is_featured?: boolean
+          is_veg?: boolean
+          modifier_groups?: Json
           name: string
           photo_url?: string | null
           price: number
           restaurant_id: string
+          short_code?: string | null
+          tax_pricing?: string
+          variants?: Json
         }
         Update: {
           category?: string
           created_at?: string
           description?: string | null
           display_order?: number
+          hide_image?: boolean
+          hsn_code?: string | null
           id?: string
+          images?: Json
           is_archived?: boolean
           is_available?: boolean
           is_featured?: boolean
+          is_veg?: boolean
+          modifier_groups?: Json
           name?: string
           photo_url?: string | null
           price?: number
           restaurant_id?: string
+          short_code?: string | null
+          tax_pricing?: string
+          variants?: Json
         }
         Relationships: [
           {
