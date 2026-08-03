@@ -89,10 +89,13 @@ function OrdersPage() {
   const [gridMode, setGridMode] = useState<GridMode>(() => (typeof window !== "undefined" ? (localStorage.getItem(LS_GRID) as GridMode) || "standard" : "standard"));
   const [topBarMode, setTopBarMode] = useState<boolean>(() => (typeof window !== "undefined" ? localStorage.getItem(LS_TOPBAR) === "1" : false));
   const [gridOpen, setGridOpen] = useState(false);
-  const [saved, setSaved] = useState<SavedCart[]>(() => {
-    if (typeof window === "undefined") return [];
-    try { return JSON.parse(localStorage.getItem(LS_SAVED) || "[]"); } catch { return []; }
-  });
+  const [saved, setSaved] = useState<SavedCart[]>([]);
+  const savedLoaded = useRef(false);
+  useEffect(() => {
+    try { setSaved(JSON.parse(localStorage.getItem(LS_SAVED) || "[]")); } catch { /* ignore */ }
+    savedLoaded.current = true;
+  }, []);
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [noteFor, setNoteFor] = useState<CartItem | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [post, setPost] = useState<PostState>({ kind: "none" });
@@ -113,6 +116,7 @@ function OrdersPage() {
   const [notifSound, setNotifSound] = useState<boolean>(() => (typeof window !== "undefined" ? localStorage.getItem(LS_SOUND) !== "0" : true));
   useEffect(() => { localStorage.setItem(LS_SOUND, notifSound ? "1" : "0"); }, [notifSound]);
   const [confirmNew, setConfirmNew] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [lookup, setLookup] = useState("");
   const [printerOpen, setPrinterOpen] = useState(false);
 
@@ -121,7 +125,7 @@ function OrdersPage() {
 
   useEffect(() => { localStorage.setItem(LS_GRID, gridMode); }, [gridMode]);
   useEffect(() => { localStorage.setItem(LS_TOPBAR, topBarMode ? "1" : "0"); }, [topBarMode]);
-  useEffect(() => { localStorage.setItem(LS_SAVED, JSON.stringify(saved)); }, [saved]);
+  useEffect(() => { if (savedLoaded.current) localStorage.setItem(LS_SAVED, JSON.stringify(saved)); }, [saved]);
   useEffect(() => { setTableNo(tableNum); }, [tableNum]);
 
   useEffect(() => {
@@ -214,7 +218,9 @@ function OrdersPage() {
     if (cart.length === 0) return toast.error("Cart is empty");
     const at = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
     const id = `s_${Date.now()}`;
-    setSaved((s) => [...s, { id, label: `Cart - ${at}`, cart, orderType, at, code: orderCode }]);
+    const label = servingTable ? `T${servingTable.number} - ${at}` : `Cart - ${at}`;
+    setSaved((s) => [...s.filter((x) => x.id !== activeSavedId), { id, label, cart, orderType, at, code: orderCode }]);
+    setActiveSavedId(null);
     setCart([]);
     toast.success(`Order saved at ${at}`);
   };
@@ -222,9 +228,31 @@ function OrdersPage() {
   const loadSaved = (s: SavedCart) => {
     setCart(s.cart); setOrderType(s.orderType);
     if (s.code) { setOrderCode(s.code); localStorage.setItem(LS_CODE, s.code); }
-    setSaved((arr) => arr.filter((x) => x.id !== s.id));
+    setActiveSavedId(s.id);
   };
-  const removeSaved = (id: string) => setSaved((arr) => arr.filter((x) => x.id !== id));
+  const removeSaved = (id: string) => {
+    setSaved((arr) => arr.filter((x) => x.id !== id));
+    setActiveSavedId((c) => (c === id ? null : c));
+  };
+
+  const occupiedTables = useMemo(() => {
+    const withOrders = new Set(activeOrders.map((o) => o.table_id).filter(Boolean) as string[]);
+    return tablesData.filter((t) => t.status === "occupied" || withOrders.has(t.id));
+  }, [tablesData, activeOrders]);
+
+  const doResetAllTables = async () => {
+    const ids = occupiedTables.map((t) => t.id);
+    setConfirmReset(false);
+    if (ids.length === 0) return toast.info("No occupied tables");
+    const { error } = await supabase.from("tables").update({ status: "available", occupied_since: null }).in("id", ids);
+    if (error) return toast.error(error.message);
+    await supabase.from("orders").update({ table_id: null })
+      .in("table_id", ids).in("status", ["pending", "cooking", "ready"]);
+    setServingTable(null);
+    setJustTaken([]);
+    await refreshTables();
+    toast.success(`${ids.length} table${ids.length > 1 ? "s" : ""} reset to available`);
+  };
 
   const newOrder = async () => {
     setCart([]); setMobile(""); setCustName(""); setTableNo(tableNum);
@@ -303,6 +331,7 @@ function OrdersPage() {
       // Order completed — clear code so next view gets new ID
       localStorage.removeItem(LS_CODE);
       if (servingTable) setServingTable(null);
+      if (activeSavedId) { removeSaved(activeSavedId); }
     }
     if (kind === "kot" && activeTableId) {
       setJustTaken((v) => (v.includes(activeTableId) ? v : [...v, activeTableId]));
@@ -359,6 +388,7 @@ function OrdersPage() {
         notifSound={notifSound}
         setNotifSound={setNotifSound}
         onPrinter={() => setPrinterOpen(true)}
+        onResetTables={() => setConfirmReset(true)}
       />
       {printerOpen && <PrinterSetupModal onClose={() => setPrinterOpen(false)} />}
       <div className="flex bg-[#F9FAFB]" style={{ height: "calc(100vh - 56px)" }}>
@@ -488,15 +518,6 @@ function OrdersPage() {
         {!showTables && (
         <aside className="w-[420px] shrink-0 bg-white border-l border-[#E5E7EB] flex flex-col">
           <div className="bg-[#0D9488] text-white px-4 py-3 shrink-0">
-            {servingTable && (
-              <div className="flex items-center justify-between gap-2 mb-2 bg-white/15 rounded-lg px-2.5 py-1.5">
-                <span className="text-[12px] font-bold uppercase tracking-wide inline-flex items-center gap-1.5">
-                  <Armchair className="size-4" /> Serving — Table {servingTable.number}
-                </span>
-                <button onClick={() => setShowTables(true)}
-                  className="h-7 px-2.5 rounded-md bg-white text-[#0D9488] text-[11px] font-bold">Change</button>
-              </div>
-            )}
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className="flex items-center gap-2 min-w-0">
                 <ShoppingCart className="size-5 shrink-0" />
@@ -514,6 +535,15 @@ function OrdersPage() {
                 </button>
               ))}
             </div>
+            {servingTable && (
+              <div className="flex items-center justify-between gap-2 mt-2 bg-white/15 rounded-lg px-2.5 py-1.5">
+                <span className="text-[12px] font-bold uppercase tracking-wide inline-flex items-center gap-1.5">
+                  Serving — <Grid3x3 className="size-4" /> Table {servingTable.number}
+                </span>
+                <button onClick={() => setShowTables(true)}
+                  className="h-7 px-2.5 rounded-md bg-white text-[#0D9488] text-[11px] font-bold">Change</button>
+              </div>
+            )}
           </div>
 
           {orderType === "delivery" && post.kind === "none" && cart.length > 0 && (
@@ -711,6 +741,22 @@ function OrdersPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm reset all tables */}
+      {confirmReset && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setConfirmReset(false)}>
+          <div className="bg-white rounded-xl p-5 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="text-[16px] font-bold mb-1 text-[#111827]">Reset All Tables?</div>
+            <div className="text-[13px] text-[#6B7280] mb-4">
+              This will mark {occupiedTables.length} occupied table{occupiedTables.length !== 1 ? "s" : ""} as available. Any active orders on these tables will be unlinked.
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmReset(false)} className="h-10 px-4 rounded-lg border border-[#E5E7EB] text-[13px] font-semibold">Cancel</button>
+              <button onClick={doResetAllTables} className="h-10 px-4 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white text-[13px] font-semibold">Reset All</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -718,7 +764,7 @@ function OrdersPage() {
 function TopNav({
   toggleSidebar, search, setSearch, tableNum, orderCode, onNewOrder,
   lookup, setLookup, onLookup, showTables, setShowTables,
-  notifOpen, setNotifOpen, notifSound, setNotifSound, onPrinter,
+  notifOpen, setNotifOpen, notifSound, setNotifSound, onPrinter, onResetTables,
 }: {
   toggleSidebar: () => void; search: string; setSearch: (s: string) => void; tableNum: string;
   orderCode: string; onNewOrder: () => void;
@@ -726,7 +772,7 @@ function TopNav({
   showTables: boolean; setShowTables: (b: boolean) => void;
   notifOpen: boolean; setNotifOpen: (b: boolean) => void;
   notifSound: boolean; setNotifSound: (b: boolean) => void;
-  onPrinter: () => void;
+  onPrinter: () => void; onResetTables: () => void;
 }) {
   const items = [
     { key: "alerts", icon: Bell, label: "Alerts", active: notifOpen, onClick: () => setNotifOpen(!notifOpen) },
@@ -758,7 +804,7 @@ function TopNav({
         {showTables ? <><ClipboardList className="size-4" /> ORDERS</> : <><Armchair className="size-4" /> {tableNum ? `T${tableNum}` : "TABLES"}</>}
       </button>
       {showTables && (
-        <button onClick={() => setShowTables(false)} className="h-9 px-2 rounded-lg border border-[#0D9488] text-[#0D9488] text-[13px] font-semibold inline-flex items-center gap-1"><RotateCw className="size-3.5" /> Reset</button>
+        <button onClick={onResetTables} className="h-9 px-2 rounded-lg border border-[#DC2626] text-[#DC2626] text-[13px] font-semibold inline-flex items-center gap-1 hover:bg-[#FEF2F2]"><RotateCw className="size-3.5" /> Reset</button>
       )}
       <div className="ml-auto flex items-center">
         {items.map(({ key, icon: Icon, label, active, to, onClick }) => {
@@ -820,6 +866,7 @@ function TablesPreview({
     for (const o of orders) if (o.table_id) (m[o.table_id] ||= []).push(o);
     return m;
   }, [orders]);
+  const [mapOpen, setMapOpen] = useState<string | null>(null);
 
   return (
     <section className="flex-1 min-w-0 overflow-y-auto p-6">
@@ -850,17 +897,34 @@ function TablesPreview({
             const occupied = t.status === "occupied" || list.length > 0;
             const tot = list.reduce((s, o) => s + Number(o.total ?? 0), 0);
             return (
-              <div key={t.id}
-                className={`rounded-lg h-[76px] flex flex-col items-center justify-center border ${occupied ? "bg-[#FFFBEB] border-[#F59E0B]" : "bg-[#F0FDF4] border-[#16A34A]"}`}>
-                <span className="text-[16px] font-bold text-[#111827]">T{t.number}</span>
-                <span className="text-[11px] text-[#6B7280]">{t.seats} seats</span>
-                {occupied && tot > 0 && <span className="text-[12px] font-bold text-[#B45309]">{formatINR(tot)}</span>}
+              <div key={t.id} className="relative">
+                <button
+                  onClick={() => (occupied ? setMapOpen((v) => (v === t.id ? null : t.id)) : onPick(t))}
+                  className={`w-full rounded-lg h-[76px] flex flex-col items-center justify-center border transition hover:shadow-md ${occupied ? "bg-[#FFFBEB] border-[#F59E0B]" : "bg-[#F0FDF4] border-[#16A34A]"}`}>
+                  <span className="text-[16px] font-bold text-[#111827]">T{t.number}</span>
+                  <span className="text-[11px] text-[#6B7280]">{t.seats} seats</span>
+                  {occupied && tot > 0 && <span className="text-[12px] font-bold text-[#B45309]">{formatINR(tot)}</span>}
+                </button>
+                {mapOpen === t.id && occupied && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setMapOpen(null)} />
+                    <div className="absolute z-40 left-1/2 -translate-x-1/2 top-full mt-1 w-[168px] bg-white rounded-xl border border-[#E5E7EB] shadow-lg p-2 space-y-1.5">
+                      <div className="text-[12px] font-bold text-[#111827] px-1">Table {t.number}</div>
+                      <button onClick={() => { setMapOpen(null); onView(t); }} className="w-full h-8 rounded-lg border border-[#E5E7EB] text-[#0D9488] text-[12px] font-semibold inline-flex items-center justify-center gap-1"><Eye className="size-3.5" /> View details</button>
+                      <div className="grid grid-cols-3 gap-1">
+                        <button onClick={() => { setMapOpen(null); onAdd(t); }} className="h-8 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-semibold">Add</button>
+                        <button onClick={() => { setMapOpen(null); onAdd(t); }} className="h-8 rounded-lg bg-[#F59E0B] hover:bg-[#D97706] text-white text-[11px] font-semibold">Bill</button>
+                        <button onClick={() => { setMapOpen(null); window.print(); }} className="h-8 rounded-lg border border-[#E5E7EB] text-[#374151] text-[11px] font-semibold inline-flex items-center justify-center"><Printer className="size-3.5" /></button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
         </div>
       ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(184px, 1fr))" }}>
+        <div className="grid gap-3 items-start" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(184px, 1fr))" }}>
           {tables.map((t) => {
             const list = byTable[t.id] ?? [];
             const occupied = t.status === "occupied" || list.length > 0;
@@ -868,9 +932,12 @@ function TablesPreview({
             const since = list.length ? list[list.length - 1].created_at : null;
             const dot = occupied ? "bg-[#F59E0B]" : t.status === "available" ? "bg-[#16A34A]" : "bg-[#9CA3AF]";
             const big = justTaken.includes(t.id);
+            const bigItems = big
+              ? list.flatMap((o) => (Array.isArray(o.items) ? o.items : [])).filter((i) => i && i.name)
+              : [];
             return (
               <div key={t.id}
-                style={big ? { gridColumn: "span 2", gridRow: "span 2" } : undefined}
+                style={big ? { gridColumn: "span 2" } : undefined}
                 className={`bg-white rounded-xl p-3 flex flex-col gap-2 transition ${big ? "ring-2 ring-[#0D9488] shadow-lg text-[1.1em]" : ""} ${occupied ? "table-dash-occupied" : "border border-[#E5E7EB]"}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-[20px] font-bold text-[#111827]">T{t.number}</span>
@@ -908,6 +975,19 @@ function TablesPreview({
                         <Printer className="size-3.5" /> Print
                       </button>
                     </div>
+                    {big && bigItems.length > 0 && (
+                      <div className="mt-1 border-t border-[#F1F5F9] pt-2">
+                        <div className="text-[10px] uppercase font-bold text-[#9CA3AF] mb-1">Items</div>
+                        <div className="space-y-0.5">
+                          {bigItems.map((it, i) => (
+                            <div key={i} className="flex items-center justify-between text-[12px] text-[#374151]">
+                              <span className="truncate pr-2">{it.name}</span>
+                              <span className="font-semibold text-[#111827] shrink-0">× {it.qty}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <button onClick={() => onPick(t)} className="mt-1 w-full h-10 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white text-[13px] font-semibold inline-flex items-center justify-center gap-1">

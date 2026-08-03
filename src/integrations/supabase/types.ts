@@ -83,6 +83,51 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_log: {
+        Row: {
+          action: string
+          actor_name: string | null
+          actor_user_id: string | null
+          created_at: string
+          details: string | null
+          id: string
+          target_restaurant_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_name?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          target_restaurant_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_name?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          target_restaurant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_target_restaurant_id_fkey"
+            columns: ["target_restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurant_status"
+            referencedColumns: ["restaurant_id"]
+          },
+          {
+            foreignKeyName: "audit_log_target_restaurant_id_fkey"
+            columns: ["target_restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           booking_time: string
@@ -504,6 +549,7 @@ export type Database = {
           bill_footer: string | null
           bill_header: string | null
           business_type: Database["public"]["Enums"]["business_type"]
+          city: string | null
           created_at: string
           gst_number: string | null
           id: string
@@ -512,6 +558,7 @@ export type Database = {
           paper_size: string
           phone: string | null
           plan: string
+          renewal_date: string | null
           share_live_data: boolean
           show_upi_qr: boolean
           status: string
@@ -530,6 +577,7 @@ export type Database = {
           bill_footer?: string | null
           bill_header?: string | null
           business_type?: Database["public"]["Enums"]["business_type"]
+          city?: string | null
           created_at?: string
           gst_number?: string | null
           id?: string
@@ -538,6 +586,7 @@ export type Database = {
           paper_size?: string
           phone?: string | null
           plan?: string
+          renewal_date?: string | null
           share_live_data?: boolean
           show_upi_qr?: boolean
           status?: string
@@ -556,6 +605,7 @@ export type Database = {
           bill_footer?: string | null
           bill_header?: string | null
           business_type?: Database["public"]["Enums"]["business_type"]
+          city?: string | null
           created_at?: string
           gst_number?: string | null
           id?: string
@@ -564,6 +614,7 @@ export type Database = {
           paper_size?: string
           phone?: string | null
           plan?: string
+          renewal_date?: string | null
           share_live_data?: boolean
           show_upi_qr?: boolean
           status?: string
@@ -640,6 +691,36 @@ export type Database = {
           id?: string
           staff_id?: string
           start_time?: string
+        }
+        Relationships: []
+      }
+      system_config: {
+        Row: {
+          created_at: string
+          default_trial_days: number
+          id: string
+          platform_name: string
+          singleton: boolean
+          support_email: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_trial_days?: number
+          id?: string
+          platform_name?: string
+          singleton?: boolean
+          support_email?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_trial_days?: number
+          id?: string
+          platform_name?: string
+          singleton?: boolean
+          support_email?: string
+          updated_at?: string
         }
         Relationships: []
       }
