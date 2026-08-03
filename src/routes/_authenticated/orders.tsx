@@ -741,6 +741,22 @@ function OrdersPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm reset all tables */}
+      {confirmReset && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setConfirmReset(false)}>
+          <div className="bg-white rounded-xl p-5 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="text-[16px] font-bold mb-1 text-[#111827]">Reset All Tables?</div>
+            <div className="text-[13px] text-[#6B7280] mb-4">
+              This will mark {occupiedTables.length} occupied table{occupiedTables.length !== 1 ? "s" : ""} as available. Any active orders on these tables will be unlinked.
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmReset(false)} className="h-10 px-4 rounded-lg border border-[#E5E7EB] text-[13px] font-semibold">Cancel</button>
+              <button onClick={doResetAllTables} className="h-10 px-4 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white text-[13px] font-semibold">Reset All</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
