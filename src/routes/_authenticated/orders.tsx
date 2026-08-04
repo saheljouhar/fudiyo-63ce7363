@@ -882,6 +882,13 @@ function TablesPreview({
     return m;
   }, [orders]);
   const [mapOpen, setMapOpen] = useState<string | null>(null);
+  const sortedTables = useMemo(() => {
+    const num = (s: string) => {
+      const m = String(s).match(/\d+/);
+      return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER;
+    };
+    return [...tables].sort((a, b) => num(a.number) - num(b.number) || String(a.number).localeCompare(String(b.number)));
+  }, [tables]);
 
   return (
     <section className="flex-1 min-w-0 overflow-y-auto p-6">
@@ -907,7 +914,7 @@ function TablesPreview({
         <div className="text-center text-[#6B7280] py-12 text-sm">No tables configured.</div>
       ) : view === "map" ? (
         <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))" }}>
-          {tables.map((t) => {
+          {sortedTables.map((t) => {
             const list = byTable[t.id] ?? [];
             const occupied = t.status === "occupied" || list.length > 0;
             const tot = list.reduce((s, o) => s + Number(o.total ?? 0), 0);
@@ -940,7 +947,7 @@ function TablesPreview({
         </div>
       ) : (
         <div className="grid gap-3 items-start" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(184px, 1fr))" }}>
-          {tables.map((t) => {
+          {sortedTables.map((t) => {
             const list = byTable[t.id] ?? [];
             const occupied = t.status === "occupied" || list.length > 0;
             const tot = list.reduce((s, o) => s + Number(o.total ?? 0), 0);
