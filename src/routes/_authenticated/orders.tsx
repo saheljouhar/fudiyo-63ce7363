@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/orders")({
   head: () => ({ meta: [{ title: "Billing — Fudiyo" }] }),
 });
 
-interface Dish { id: string; name: string; category: string; price: number; is_available: boolean; description: string | null; photo_url: string | null; restaurant_id: string }
+interface Dish { id: string; name: string; category: string; price: number; is_available: boolean; description: string | null; photo_url: string | null; restaurant_id: string; channel_prices?: unknown; track_stock?: boolean }
 interface CartItem { id: string; name: string; price: number; qty: number; is_veg?: boolean; note?: string }
 interface SavedCart { id: string; label: string; cart: CartItem[]; orderType: OrderType; at: string; code: string }
 interface TableRow { id: string; number: string; seats: number; status: string }
@@ -128,10 +128,14 @@ function OrdersPage() {
   useEffect(() => { if (savedLoaded.current) localStorage.setItem(LS_SAVED, JSON.stringify(saved)); }, [saved]);
   useEffect(() => { setTableNo(tableNum); }, [tableNum]);
 
+  const loadDishes = async () => {
+    const { data } = await supabase.from("dishes").select("*").eq("is_archived", false).order("category");
+    if (data) setDishes(data as unknown as Dish[]);
+  };
+
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("dishes").select("*").eq("is_archived", false).order("category");
-      if (data) setDishes(data as Dish[]);
+      await loadDishes();
       const { data: tbls } = await supabase.from("tables").select("id, number, seats, status").order("number");
       if (tbls) setTablesData(tbls as TableRow[]);
       if (tableId) {
@@ -140,6 +144,17 @@ function OrdersPage() {
       }
     })();
   }, [tableId]);
+
+  // Keep the billing menu grid in sync with Menu Management (live)
+  useEffect(() => {
+    const ch = supabase
+      .channel("billing-dishes-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "dishes" }, () => { void loadDishes(); })
+      .subscribe();
+    const onFocus = () => { void loadDishes(); };
+    window.addEventListener("focus", onFocus);
+    return () => { void supabase.removeChannel(ch); window.removeEventListener("focus", onFocus); };
+  }, []);
 
   const refreshTables = async () => {
     const { data: tbls } = await supabase.from("tables").select("id, number, seats, status").order("number");
@@ -189,14 +204,30 @@ function OrdersPage() {
     return out;
   }, [visible, cats]);
 
+  // Channel-specific price with fallback: channel price -> dine-in price -> base price
+  const priceFor = (d: Dish, type: OrderType) => {
+    const cp = (d.channel_prices ?? {}) as Record<string, number | undefined>;
+    const v = cp?.[type] ?? cp?.dine_in;
+    return v != null && Number(v) > 0 ? Number(v) : Number(d.price);
+  };
+
   const addToCart = (d: Dish) => {
     if (!d.is_available) return;
     setCart((c) => {
       const ex = c.find((x) => x.id === d.id);
       if (ex) return c.map((x) => x.id === d.id ? { ...x, qty: x.qty + 1 } : x);
-      return [...c, { id: d.id, name: d.name, price: Number(d.price), qty: 1 }];
+      return [...c, { id: d.id, name: d.name, price: priceFor(d, orderType), qty: 1 }];
     });
   };
+
+  // Re-price the cart when the order type changes (dine-in / takeaway / delivery)
+  useEffect(() => {
+    setCart((c) => c.map((x) => {
+      const d = dishes.find((y) => y.id === x.id);
+      return d ? { ...x, price: priceFor(d, orderType) } : x;
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderType, dishes]);
   const inc = (id: string) => setCart((c) => c.map((x) => x.id === id ? { ...x, qty: x.qty + 1 } : x));
   const dec = (id: string) => setCart((c) => c.map((x) => x.id === id ? { ...x, qty: x.qty - 1 } : x).filter((x) => x.qty > 0));
   const remove = (id: string) => setCart((c) => c.filter((x) => x.id !== id));
@@ -324,6 +355,15 @@ function OrdersPage() {
     if (error) return toast.error(error.message);
     if (activeTableId) {
       await supabase.from("tables").update({ status: kind === "kot" ? "occupied" : "available" }).eq("id", activeTableId);
+    }
+    // Auto-deduct stock for dishes flagged "Track Stock Count"
+    for (const line of cart) {
+      const d = dishes.find((x) => x.id === line.id);
+      if (!d?.track_stock) continue;
+      const { data: inv } = await supabase.from("inventory_items").select("id, quantity").ilike("name", d.name).maybeSingle();
+      if (inv) {
+        await supabase.from("inventory_items").update({ quantity: Math.max(0, Number(inv.quantity) - line.qty) }).eq("id", inv.id);
+      }
     }
     const billNo = Math.floor(Math.random() * 9000) + 1000;
     setPost({ kind, billNo, shortId: orderCode, at: new Date().toLocaleString("en-IN"), items: cart, subtotal, tax, total, orderType, custName, pay });
