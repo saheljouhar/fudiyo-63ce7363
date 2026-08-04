@@ -361,6 +361,16 @@ function OrdersPage() {
   };
 
   const pickTable = async (t: TableRow) => {
+    // Full reset of the Order Summary panel before loading the new table context
+    setCart([]);
+    setPost({ kind: "none" });
+    setActiveSavedId(null);
+    setMobile(""); setCustName(""); setPay("cash"); setOrderType("dine_in");
+    setDeliveryPerson(""); setDeliveryPhone(""); setDeliveryAddr(""); setShowAddr(false);
+    persistedRef.current = false;
+    const c = await uniqueCode();
+    setOrderCode(c);
+    localStorage.setItem(LS_CODE, c);
     setTableNo(String(t.number));
     setShowTables(false);
     setServingTable({ id: t.id, number: String(t.number) });
