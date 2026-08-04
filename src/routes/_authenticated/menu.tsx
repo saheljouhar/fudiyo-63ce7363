@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { formatINR } from "@/lib/format";
-import { Plus, Pencil, Trash2, Copy, Search, Camera, Eye, Star, Upload, QrCode, Image as ImageIcon, ImageOff, LayoutGrid, List, X, Download, MoreHorizontal, EyeOff, UtensilsCrossed } from "lucide-react";
+import { Plus, ShoppingBag, Bike, Pencil, Trash2, Copy, Search, Eye, Star, Upload, QrCode, Image as ImageIcon, ImageOff, LayoutGrid, List, X, Download, MoreHorizontal, EyeOff, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/menu")({
@@ -394,12 +394,26 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
     description: initial.description ?? "",
     price: initial.price ?? 0,
     is_available: initial.is_available ?? true,
-    photo_url: initial.photo_url ?? "",
     is_veg: initial.is_veg ?? true,
     short_code: initial.short_code ?? "",
     hsn_code: initial.hsn_code ?? "",
     tax_pricing: initial.tax_pricing ?? "follow_restaurant",
+    hide_image: initial.hide_image ?? false,
+    track_stock: (initial as { track_stock?: boolean }).track_stock ?? false,
+    sold_by_weight: (initial as { sold_by_weight?: boolean }).sold_by_weight ?? false,
   });
+  const initialChannels = ((initial as { channel_prices?: Record<string, number> }).channel_prices ?? {}) as Record<string, number>;
+  const [channels, setChannels] = useState({
+    dine_in: initialChannels.dine_in != null ? String(initialChannels.dine_in) : "",
+    takeaway: initialChannels.takeaway != null ? String(initialChannels.takeaway) : "",
+    delivery: initialChannels.delivery != null ? String(initialChannels.delivery) : "",
+  });
+  const [images, setImages] = useState<string[]>(() => {
+    const arr = Array.isArray(initial.images) ? (initial.images as string[]) : [];
+    if (arr.length) return arr;
+    return initial.photo_url ? [initial.photo_url] : [];
+  });
+  const [uploading, setUploading] = useState(false);
   const [variants, setVariants] = useState<{ name: string; price: number }[]>(
     Array.isArray(initial.variants) ? (initial.variants as { name: string; price: number }[]) : [],
   );
@@ -408,13 +422,31 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
   );
   const [saving, setSaving] = useState(false);
 
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const room = 4 - images.length;
+    if (room <= 0) { toast.error("Maximum 4 images"); return; }
+    setUploading(true);
+    const next: string[] = [];
+    for (const file of Array.from(files).slice(0, room)) {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await supabase.storage.from("dish-photos").upload(path, file);
+      if (error) { toast.error(error.message); continue; }
+      const { data: signed } = await supabase.storage.from("dish-photos").createSignedUrl(path, 60 * 60 * 24 * 365 * 5);
+      if (signed?.signedUrl) next.push(signed.signedUrl);
+    }
+    setImages((cur) => [...cur, ...next]);
+    setUploading(false);
+    if (next.length) toast.success(`${next.length} image${next.length > 1 ? "s" : ""} uploaded`);
+  };
+
   const save = async () => {
     if (!form.name.trim() || !form.category.trim() || Number(form.price) <= 0) {
       toast.error("Name, category and price are required");
       return;
     }
     setSaving(true);
-    // get restaurant_id from existing dishes or fetch first
     let restaurantId = initial.restaurant_id;
     if (!restaurantId) {
       const { data } = await supabase.from("restaurants").select("id").limit(1).maybeSingle();
@@ -422,12 +454,22 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
     }
     if (!restaurantId) { toast.error("No restaurant configured"); setSaving(false); return; }
 
+    const cp: Record<string, number> = {};
+    (["dine_in", "takeaway", "delivery"] as const).forEach((k) => {
+      const raw = channels[k];
+      const v = Number(raw);
+      if (raw !== "" && !Number.isNaN(v) && v > 0) cp[k] = v;
+    });
+
     const payload = {
       ...form,
       short_code: form.short_code || null,
       hsn_code: form.hsn_code || null,
       price: Number(form.price),
       restaurant_id: restaurantId,
+      photo_url: images[0] ?? null,
+      images,
+      channel_prices: cp,
       variants: variants.filter((v) => v.name.trim()),
       modifier_groups: modifiers.filter((m) => m.name.trim()),
     };
@@ -441,50 +483,123 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-4xl bg-white rounded-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="bg-[#0D9488] text-white px-5 py-4 flex items-center justify-between">
           <h2 className="text-base font-bold">{initial.id ? "Edit Dish" : "Add New Dish"}</h2>
           <button onClick={onClose} className="size-8 inline-flex items-center justify-center rounded hover:bg-white/10"><X className="size-4" /></button>
         </div>
-        <div className="p-6 space-y-4 overflow-y-auto">
-          <Field label="Dish name *"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-          <Field label="Food type">
-            <div className="flex gap-2">
-              {[{ v: true, l: "Veg", c: "#16A34A" }, { v: false, l: "Non-Veg", c: "#DC2626" }].map((o) => (
-                <button key={o.l} type="button" onClick={() => setForm({ ...form, is_veg: o.v })}
-                  className="flex-1 h-10 rounded-md border-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
-                  style={form.is_veg === o.v ? { borderColor: o.c, color: o.c, backgroundColor: `${o.c}12` } : { borderColor: "#E5E7EB", color: "#6B7280" }}>
-                  <VegMark isVeg={o.v} /> {o.l}
-                </button>
-              ))}
+
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto items-start">
+          {/* LEFT COLUMN */}
+          <div className="space-y-4">
+            <Field label="Item Name *"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Short Code"><input className="input" value={form.short_code} onChange={(e) => setForm({ ...form, short_code: e.target.value })} placeholder="e.g. CB01" /></Field>
+              <Field label="HSN / SAC Code"><input className="input" value={form.hsn_code} onChange={(e) => setForm({ ...form, hsn_code: e.target.value })} placeholder="e.g. 996331" /></Field>
             </div>
-          </Field>
-          <Field label="Category *"><input className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Rice Items" /></Field>
-          <Field label="Description"><textarea className="input min-h-[80px]" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
-          <Field label="Price (₹) *"><input type="number" className="input" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Short code"><input className="input" value={form.short_code} onChange={(e) => setForm({ ...form, short_code: e.target.value })} placeholder="e.g. CB01" /></Field>
-            <Field label="HSN / SAC code"><input className="input" value={form.hsn_code} onChange={(e) => setForm({ ...form, hsn_code: e.target.value })} placeholder="e.g. 996331" /></Field>
+            <Field label="Category *"><input className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Rice Items" /></Field>
+            <Field label="Food type">
+              <div className="flex gap-2">
+                {[{ v: true, l: "Veg", c: "#16A34A" }, { v: false, l: "Non-Veg", c: "#DC2626" }].map((o) => (
+                  <button key={o.l} type="button" onClick={() => setForm({ ...form, is_veg: o.v })}
+                    className="flex-1 h-10 rounded-md border-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
+                    style={form.is_veg === o.v ? { borderColor: o.c, color: o.c, backgroundColor: `${o.c}12` } : { borderColor: "#E5E7EB", color: "#6B7280" }}>
+                    <VegMark isVeg={o.v} /> {o.l}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Description"><textarea className="input min-h-[80px]" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Price (₹) *"><input type="number" className="input" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} /></Field>
+              <Field label="Tax Pricing">
+                <select className="input" value={form.tax_pricing} onChange={(e) => setForm({ ...form, tax_pricing: e.target.value })}>
+                  <option value="follow_restaurant">Follow restaurant setting</option>
+                  <option value="inclusive">Tax inclusive</option>
+                  <option value="exclusive">Tax exclusive</option>
+                </select>
+              </Field>
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold text-muted-foreground mb-1">Channel Prices (optional)</div>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { k: "dine_in" as const, label: "Dine-In", icon: <UtensilsCrossed className="size-3.5 text-[#0D9488]" /> },
+                  { k: "takeaway" as const, label: "Takeaway", icon: <ShoppingBag className="size-3.5 text-[#F59E0B]" /> },
+                  { k: "delivery" as const, label: "Delivery", icon: <Bike className="size-3.5 text-[#2563EB]" /> },
+                ]).map((c) => (
+                  <div key={c.k}>
+                    <div className="text-[11px] font-semibold text-[#374151] mb-1 inline-flex items-center gap-1">{c.icon} {c.label}</div>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₹</span>
+                      <input type="number" className="input" style={{ paddingLeft: 22 }} placeholder={String(form.price || 0)}
+                        value={channels[c.k]} onChange={(e) => setChannels({ ...channels, [c.k]: e.target.value })} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-1.5">
+                Empty zones inherit Dine-In price. Empty channels use base price.{" "}
+                <span className="text-[#0D9488] font-semibold cursor-pointer underline-offset-2 hover:underline">Admin → Pricing Rules</span>
+              </div>
+            </div>
+
+            <label className="flex items-start gap-2.5 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] p-3 cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={form.track_stock} onChange={(e) => setForm({ ...form, track_stock: e.target.checked })} />
+              <span>
+                <span className="block text-sm font-semibold text-[#1E3A8A]">Track Stock Count</span>
+                <span className="block text-[11px] text-[#2563EB]">Synced with Inventory — auto-deducts on orders</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2.5 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] p-3 cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={form.sold_by_weight} onChange={(e) => setForm({ ...form, sold_by_weight: e.target.checked })} />
+              <span>
+                <span className="block text-sm font-semibold text-[#1E3A8A]">Sold by Weight</span>
+                <span className="block text-[11px] text-[#2563EB]">Enable for items priced per kg/lb (requires weighing scale)</span>
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={form.is_available} onChange={(e) => setForm({ ...form, is_available: e.target.checked })} />
+              Available
+            </label>
           </div>
-          <Field label="Tax pricing">
-            <select className="input" value={form.tax_pricing} onChange={(e) => setForm({ ...form, tax_pricing: e.target.value })}>
-              <option value="follow_restaurant">Follow restaurant setting</option>
-              <option value="inclusive">Tax inclusive</option>
-              <option value="exclusive">Tax exclusive</option>
-            </select>
-          </Field>
-          <RowEditor title="Variants" hint="e.g. Half / Full" rows={variants} setRows={setVariants} />
-          <RowEditor title="Modifiers / Add-ons" hint="e.g. Extra cheese" rows={modifiers} setRows={setModifiers} />
-          <Field label="Photo URL"><input className="input" value={form.photo_url} onChange={(e) => setForm({ ...form, photo_url: e.target.value })} placeholder="https://..." /></Field>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.is_available} onChange={(e) => setForm({ ...form, is_available: e.target.checked })} />
-            Available
-          </label>
-          <div className="rounded-md bg-gray-50 p-3 text-xs text-gray-500 flex items-start gap-2">
-            <Camera className="size-4 shrink-0 mt-0.5" />
-            Photo upload to cloud storage ships next phase. For now paste an image URL.
+
+          {/* RIGHT COLUMN */}
+          <div className="space-y-4">
+            <div>
+              <div className="text-xs font-semibold text-muted-foreground mb-1">Item Images</div>
+              <label className="block rounded-lg border-2 border-dashed border-[#CBD5E1] hover:border-[#0D9488] transition p-6 text-center cursor-pointer bg-[#F8FAFC]">
+                <input type="file" accept="image/*" multiple className="hidden" disabled={uploading || images.length >= 4}
+                  onChange={(e) => { void uploadFiles(e.target.files); e.currentTarget.value = ""; }} />
+                <Upload className="size-6 mx-auto text-[#0D9488]" />
+                <div className="text-sm font-semibold mt-2">{uploading ? "Uploading..." : "Upload Images"}</div>
+                <div className="text-[11px] text-muted-foreground">{Math.max(0, 4 - images.length)} more allowed (max 4)</div>
+                <div className="text-[11px] text-muted-foreground mt-1">Drag &amp; drop or click to select</div>
+              </label>
+              {images.length > 0 && (
+                <div className="grid grid-cols-4 gap-2 mt-2">
+                  {images.map((src, i) => (
+                    <div key={i} className="relative rounded-md overflow-hidden border border-border aspect-square">
+                      <img src={src} alt={`${form.name || "Dish"} image ${i + 1}`} className="size-full object-cover" />
+                      <button type="button" onClick={() => setImages((cur) => cur.filter((_, j) => j !== i))}
+                        className="absolute top-1 right-1 size-5 rounded-full bg-[#DC2626] text-white inline-flex items-center justify-center"><X className="size-3" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="flex items-center gap-2 text-sm mt-2">
+                <input type="checkbox" checked={form.hide_image} onChange={(e) => setForm({ ...form, hide_image: e.target.checked })} />
+                Hide image
+              </label>
+            </div>
+
+            <RowEditor title="Variants" hint="e.g., Half, Full" rows={variants} setRows={setVariants} />
+            <RowEditor title="Modifier Groups" hint="e.g., Extra cheese" rows={modifiers} setRows={setModifiers} />
           </div>
         </div>
+
         <div className="flex gap-2 px-6 py-4 border-t bg-gray-50">
           <button onClick={onClose} className="flex-1 h-11 rounded-md border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">Cancel</button>
           <button onClick={save} disabled={saving} className="flex-1 h-11 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Saving..." : initial.id ? "Save Changes" : "Add Dish"}</button>
@@ -516,11 +631,17 @@ function RowEditor({ title, hint, rows, setRows }: {
       ) : (
         <div className="space-y-2">
           {rows.map((r, i) => (
-            <div key={i} className="flex gap-2">
-              <input className="input flex-1" placeholder={hint} value={r.name}
-                onChange={(e) => setRows((list) => list.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-              <input type="number" className="input w-24" placeholder="₹" value={r.price}
-                onChange={(e) => setRows((list) => list.map((x, j) => j === i ? { ...x, price: Number(e.target.value) } : x))} />
+            <div key={i} className="flex gap-2 items-end">
+              <div className="flex-1">
+                <div className="text-[11px] font-semibold text-muted-foreground mb-1">Name</div>
+                <input className="input" placeholder={hint} value={r.name}
+                  onChange={(e) => setRows((list) => list.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
+              </div>
+              <div className="w-28">
+                <div className="text-[11px] font-semibold text-muted-foreground mb-1">Price</div>
+                <input type="number" className="input" placeholder="₹ 0" value={r.price}
+                  onChange={(e) => setRows((list) => list.map((x, j) => j === i ? { ...x, price: Number(e.target.value) } : x))} />
+              </div>
               <button type="button" onClick={() => setRows((list) => list.filter((_, j) => j !== i))}
                 className="size-9 shrink-0 inline-flex items-center justify-center rounded-md border border-border text-[#DC2626]"><X className="size-4" /></button>
             </div>
