@@ -411,7 +411,12 @@ function OrdersPage() {
             justTaken={justTaken}
             onPick={pickTable}
             onView={(t) => setDetailTable(t)}
-            onAdd={(t) => { setServingTable({ id: t.id, number: String(t.number) }); setTableNo(String(t.number)); setShowTables(false); }}
+            onAdd={(t) => {
+              setCart([]); setPost({ kind: "none" }); setActiveSavedId(null);
+              setServingTable({ id: t.id, number: String(t.number) });
+              setTableNo(String(t.number));
+              setShowTables(false);
+            }}
             onRefresh={refreshTables}
           />
         ) : (
