@@ -361,6 +361,16 @@ function OrdersPage() {
   };
 
   const pickTable = async (t: TableRow) => {
+    // Full reset of the Order Summary panel before loading the new table context
+    setCart([]);
+    setPost({ kind: "none" });
+    setActiveSavedId(null);
+    setMobile(""); setCustName(""); setPay("cash"); setOrderType("dine_in");
+    setDeliveryPerson(""); setDeliveryPhone(""); setDeliveryAddr(""); setShowAddr(false);
+    persistedRef.current = false;
+    const c = await uniqueCode();
+    setOrderCode(c);
+    localStorage.setItem(LS_CODE, c);
     setTableNo(String(t.number));
     setShowTables(false);
     setServingTable({ id: t.id, number: String(t.number) });
@@ -401,7 +411,12 @@ function OrdersPage() {
             justTaken={justTaken}
             onPick={pickTable}
             onView={(t) => setDetailTable(t)}
-            onAdd={(t) => { setServingTable({ id: t.id, number: String(t.number) }); setTableNo(String(t.number)); setShowTables(false); }}
+            onAdd={(t) => {
+              setCart([]); setPost({ kind: "none" }); setActiveSavedId(null);
+              setServingTable({ id: t.id, number: String(t.number) });
+              setTableNo(String(t.number));
+              setShowTables(false);
+            }}
             onRefresh={refreshTables}
           />
         ) : (
@@ -867,6 +882,13 @@ function TablesPreview({
     return m;
   }, [orders]);
   const [mapOpen, setMapOpen] = useState<string | null>(null);
+  const sortedTables = useMemo(() => {
+    const num = (s: string) => {
+      const m = String(s).match(/\d+/);
+      return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER;
+    };
+    return [...tables].sort((a, b) => num(a.number) - num(b.number) || String(a.number).localeCompare(String(b.number)));
+  }, [tables]);
 
   return (
     <section className="flex-1 min-w-0 overflow-y-auto p-6">
@@ -892,7 +914,7 @@ function TablesPreview({
         <div className="text-center text-[#6B7280] py-12 text-sm">No tables configured.</div>
       ) : view === "map" ? (
         <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))" }}>
-          {tables.map((t) => {
+          {sortedTables.map((t) => {
             const list = byTable[t.id] ?? [];
             const occupied = t.status === "occupied" || list.length > 0;
             const tot = list.reduce((s, o) => s + Number(o.total ?? 0), 0);
@@ -925,7 +947,7 @@ function TablesPreview({
         </div>
       ) : (
         <div className="grid gap-3 items-start" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(184px, 1fr))" }}>
-          {tables.map((t) => {
+          {sortedTables.map((t) => {
             const list = byTable[t.id] ?? [];
             const occupied = t.status === "occupied" || list.length > 0;
             const tot = list.reduce((s, o) => s + Number(o.total ?? 0), 0);
@@ -968,15 +990,8 @@ function TablesPreview({
                         <div className="text-[16px] font-bold text-[#111827] leading-tight">{formatINR(tot)}</div>
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <button onClick={() => onAdd(t)} className="h-9 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[12px] font-semibold">Add</button>
-                      <button onClick={() => onAdd(t)} className="h-9 rounded-lg bg-[#F59E0B] hover:bg-[#D97706] text-white text-[12px] font-semibold">Bill</button>
-                      <button onClick={() => window.print()} className="h-9 rounded-lg border border-[#E5E7EB] text-[#374151] text-[12px] font-semibold inline-flex items-center justify-center gap-1">
-                        <Printer className="size-3.5" /> Print
-                      </button>
-                    </div>
                     {big && bigItems.length > 0 && (
-                      <div className="mt-1 border-t border-[#F1F5F9] pt-2">
+                      <div className="border-t border-[#F1F5F9] pt-2">
                         <div className="text-[10px] uppercase font-bold text-[#9CA3AF] mb-1">Items</div>
                         <div className="space-y-0.5">
                           {bigItems.map((it, i) => (
@@ -988,6 +1003,13 @@ function TablesPreview({
                         </div>
                       </div>
                     )}
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button onClick={() => onAdd(t)} className="h-9 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[12px] font-semibold">Add</button>
+                      <button onClick={() => onAdd(t)} className="h-9 rounded-lg bg-[#F59E0B] hover:bg-[#D97706] text-white text-[12px] font-semibold">Bill</button>
+                      <button onClick={() => window.print()} className="h-9 rounded-lg border border-[#E5E7EB] text-[#374151] text-[12px] font-semibold inline-flex items-center justify-center gap-1">
+                        <Printer className="size-3.5" /> Print
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <button onClick={() => onPick(t)} className="mt-1 w-full h-10 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white text-[13px] font-semibold inline-flex items-center justify-center gap-1">
