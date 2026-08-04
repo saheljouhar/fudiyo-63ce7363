@@ -216,6 +216,7 @@ export type Database = {
       dishes: {
         Row: {
           category: string
+          channel_prices: Json
           created_at: string
           description: string | null
           display_order: number
@@ -233,11 +234,14 @@ export type Database = {
           price: number
           restaurant_id: string
           short_code: string | null
+          sold_by_weight: boolean
           tax_pricing: string
+          track_stock: boolean
           variants: Json
         }
         Insert: {
           category: string
+          channel_prices?: Json
           created_at?: string
           description?: string | null
           display_order?: number
@@ -255,11 +259,14 @@ export type Database = {
           price: number
           restaurant_id: string
           short_code?: string | null
+          sold_by_weight?: boolean
           tax_pricing?: string
+          track_stock?: boolean
           variants?: Json
         }
         Update: {
           category?: string
+          channel_prices?: Json
           created_at?: string
           description?: string | null
           display_order?: number
@@ -277,7 +284,9 @@ export type Database = {
           price?: number
           restaurant_id?: string
           short_code?: string | null
+          sold_by_weight?: boolean
           tax_pricing?: string
+          track_stock?: boolean
           variants?: Json
         }
         Relationships: [
