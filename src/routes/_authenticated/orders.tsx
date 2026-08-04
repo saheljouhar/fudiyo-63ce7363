@@ -990,15 +990,8 @@ function TablesPreview({
                         <div className="text-[16px] font-bold text-[#111827] leading-tight">{formatINR(tot)}</div>
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <button onClick={() => onAdd(t)} className="h-9 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[12px] font-semibold">Add</button>
-                      <button onClick={() => onAdd(t)} className="h-9 rounded-lg bg-[#F59E0B] hover:bg-[#D97706] text-white text-[12px] font-semibold">Bill</button>
-                      <button onClick={() => window.print()} className="h-9 rounded-lg border border-[#E5E7EB] text-[#374151] text-[12px] font-semibold inline-flex items-center justify-center gap-1">
-                        <Printer className="size-3.5" /> Print
-                      </button>
-                    </div>
                     {big && bigItems.length > 0 && (
-                      <div className="mt-1 border-t border-[#F1F5F9] pt-2">
+                      <div className="border-t border-[#F1F5F9] pt-2">
                         <div className="text-[10px] uppercase font-bold text-[#9CA3AF] mb-1">Items</div>
                         <div className="space-y-0.5">
                           {bigItems.map((it, i) => (
@@ -1010,6 +1003,13 @@ function TablesPreview({
                         </div>
                       </div>
                     )}
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button onClick={() => onAdd(t)} className="h-9 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[12px] font-semibold">Add</button>
+                      <button onClick={() => onAdd(t)} className="h-9 rounded-lg bg-[#F59E0B] hover:bg-[#D97706] text-white text-[12px] font-semibold">Bill</button>
+                      <button onClick={() => window.print()} className="h-9 rounded-lg border border-[#E5E7EB] text-[#374151] text-[12px] font-semibold inline-flex items-center justify-center gap-1">
+                        <Printer className="size-3.5" /> Print
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <button onClick={() => onPick(t)} className="mt-1 w-full h-10 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white text-[13px] font-semibold inline-flex items-center justify-center gap-1">
