@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { formatINR, elapsedMinutes } from "@/lib/format";
 import { toast } from "sonner";
+import { FloorLayoutEditor } from "@/components/tables/FloorLayoutEditor";
 
 type TableStatus = "available" | "occupied" | "bill_requested" | "reserved" | "cleaning";
 interface TableRow {
@@ -252,11 +253,7 @@ function TablesPage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-[#E2E8F0] bg-white p-16 text-center">
-              <LayoutTemplate className="size-12 mx-auto text-[#CBD5E1] mb-3" strokeWidth={1.5} />
-              <p className="text-[15px] font-semibold text-[#111827]">Floor Layout Editor</p>
-              <p className="text-[13px] text-[#6B7280] mt-1">Drag-and-drop layout view is coming soon.</p>
-            </div>
+            <FloorLayoutEditor tables={visible} floor={activeFloor} />
           )}
         </>
       ) : (
@@ -855,6 +852,15 @@ function EditTableModal({ table, floors, onClose }: { table: TableRow; floors: s
   const [floor, setFloor] = useState(table.floor);
   const [seats, setSeats] = useState(table.seats);
   const [saving, setSaving] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const hasActiveOrder = table.status === "occupied" || table.status === "bill_requested";
+  const del = async () => {
+    const { error } = await supabase.from("tables").delete().eq("id", table.id);
+    if (error) return toast.error(error.message);
+    toast.success(`Table ${table.number} deleted`);
+    setConfirmDel(false);
+    onClose();
+  };
   const save = async () => {
     setSaving(true);
     const { error } = await supabase.from("tables").update({ number, floor, seats } as never).eq("id", table.id);
@@ -885,6 +891,29 @@ function EditTableModal({ table, floors, onClose }: { table: TableRow; floors: s
           <button onClick={onClose} className="flex-1 h-10 rounded-md border bg-white text-[13px] font-semibold">Cancel</button>
           <button disabled={saving} onClick={save} className="flex-1 h-10 rounded-md bg-[#0D9488] text-white text-[13px] font-semibold disabled:opacity-50">Save</button>
         </div>
+        <div className="pt-3 mt-1 border-t border-[#E5E7EB]">
+          <button
+            onClick={() => { if (hasActiveOrder) return; setConfirmDel(true); }}
+            disabled={hasActiveOrder}
+            className="w-full h-10 rounded-md border border-[#FECACA] text-[#DC2626] text-[13px] font-semibold hover:bg-[#FEF2F2] disabled:opacity-50 inline-flex items-center justify-center gap-1.5">
+            <X className="size-4" /> Delete Table
+          </button>
+          {hasActiveOrder && (
+            <p className="text-[12px] text-[#DC2626] mt-2">This table has an active order — clear it before deleting.</p>
+          )}
+        </div>
+        {confirmDel && (
+          <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" onClick={() => setConfirmDel(false)}>
+            <div className="w-full max-w-sm bg-white rounded-xl shadow-2xl p-5" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-[15px] font-bold text-[#111827]">Delete Table {table.number}?</h3>
+              <p className="text-[13px] text-[#6B7280] mt-1.5">This removes the table from the floor grid and layout. This can’t be undone.</p>
+              <div className="flex gap-2 mt-4">
+                <button onClick={() => setConfirmDel(false)} className="flex-1 h-10 rounded-md border bg-white text-[13px] font-semibold">Cancel</button>
+                <button onClick={del} className="flex-1 h-10 rounded-md bg-[#DC2626] hover:bg-[#B91C1C] text-white text-[13px] font-semibold">Delete</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </ModalShell>
   );

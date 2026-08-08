@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { formatINR } from "@/lib/format";
 import { Plus, ShoppingBag, Bike, Camera, Pencil, Trash2, Copy, Search, Eye, Star, Upload, QrCode, Image as ImageIcon, ImageOff, LayoutGrid, List, X, Download, MoreHorizontal, EyeOff, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { UploadMenuModal } from "@/components/menu/UploadMenuModal";
 
 export const Route = createFileRoute("/_authenticated/menu")({
   component: MenuPage,
@@ -45,6 +47,9 @@ function MenuPage() {
   const [showCustomize, setShowCustomize] = useState(false);
   const [editing, setEditing] = useState<Partial<Dish> | null>(null);
   const [viewing, setViewing] = useState<Dish | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<Dish | null>(null);
+  const [confirmDelAll, setConfirmDelAll] = useState(false);
 
   const load = async () => {
     const { data } = await supabase.from("dishes").select("*").eq("is_archived", false).order("category").order("display_order");
@@ -84,10 +89,18 @@ function MenuPage() {
   };
 
   const del = async (d: Dish) => {
-    if (!confirm(`Delete "${d.name}"?`)) return;
     const { error } = await supabase.from("dishes").update({ is_archived: true }).eq("id", d.id);
     if (error) toast.error(error.message);
     else toast.success("Dish removed");
+  };
+
+  const delAll = async () => {
+    const ids = visible.map((d) => d.id);
+    setConfirmDelAll(false);
+    if (!ids.length) return;
+    const { error } = await supabase.from("dishes").update({ is_archived: true }).in("id", ids);
+    if (error) toast.error(error.message);
+    else toast.success(`${ids.length} item${ids.length > 1 ? "s" : ""} removed`);
   };
 
   const toggleHideImage = async (d: Dish) => {
@@ -116,14 +129,14 @@ function MenuPage() {
 
       {/* Action toolbar */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <ToolBtn color="#DC2626" onClick={() => toast.info("Upload menu — coming soon")}><Upload className="size-4" /> Upload</ToolBtn>
+        <ToolBtn color="#DC2626" onClick={() => setShowUpload(true)}><Upload className="size-4" /> Upload Menu</ToolBtn>
         <ToolBtn color="#F59E0B" onClick={() => toast.info("Bulk photo upload — coming soon")}><Camera className="size-4" /> Photo</ToolBtn>
         <ToolBtn color="#0D9488" onClick={() => setShowQr(true)}><QrCode className="size-4" /> QR Code</ToolBtn>
         <ToolBtn outline color="#0D9488" onClick={() => setShowCustomize(true)}><Eye className="size-4" /> Customize</ToolBtn>
         <ToolBtn outline color="#16A34A" onClick={() => setHideImages((v) => !v)}>
           {hideImages ? <ImageIcon className="size-4" /> : <ImageOff className="size-4" />} {hideImages ? "Show Images" : "Hide Images"}
         </ToolBtn>
-        <ToolBtn outline color="#DC2626" onClick={() => toast.error("Delete All requires confirmation in next phase")}><Trash2 className="size-4" /> Delete All</ToolBtn>
+        <ToolBtn outline color="#DC2626" onClick={() => setConfirmDelAll(true)}><Trash2 className="size-4" /> Delete All</ToolBtn>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-5">
@@ -165,7 +178,7 @@ function MenuPage() {
               hideImage={hideImages || d.hide_image}
               onEdit={() => setEditing(d)}
               onDup={() => duplicate(d)}
-              onDel={() => del(d)}
+              onDel={() => setConfirmDel(d)}
               onToggle={() => toggleAvail(d)}
               onView={() => setViewing(d)}
               onHideImage={() => toggleHideImage(d)}
@@ -175,14 +188,32 @@ function MenuPage() {
         </div>
       )}
 
-      {editing && <DishDrawer initial={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+      {editing && <DishDrawer initial={editing} categories={categories} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+      {showUpload && <UploadMenuModal categories={categories} onClose={() => setShowUpload(false)} onDone={() => { setShowUpload(false); load(); }} />}
+      {confirmDel && (
+        <ConfirmDialog
+          title={`Delete ${confirmDel.name}?`}
+          body="This item will be removed from your menu. This can't be undone."
+          onCancel={() => setConfirmDel(null)}
+          onConfirm={async () => { const d = confirmDel; setConfirmDel(null); await del(d); }}
+        />
+      )}
+      {confirmDelAll && (
+        <ConfirmDialog
+          title="Delete all items?"
+          body={`${visible.length} menu item${visible.length === 1 ? "" : "s"} currently shown will be removed. This can't be undone.`}
+          confirmLabel="Delete All"
+          onCancel={() => setConfirmDelAll(false)}
+          onConfirm={delAll}
+        />
+      )}
       {viewing && (
         <ViewDetailsModal
           d={viewing}
           onClose={() => setViewing(null)}
           onEdit={() => { setEditing(viewing); setViewing(null); }}
           onMarkOut={async () => { await toggleAvail(viewing); setViewing(null); }}
-          onDelete={async () => { await del(viewing); setViewing(null); }}
+          onDelete={() => { setConfirmDel(viewing); setViewing(null); }}
         />
       )}
       {showQr && <QrModal onClose={() => setShowQr(false)} />}
@@ -390,7 +421,7 @@ function IconBtn({ children, onClick, title, className = "" }: { children: React
   );
 }
 
-function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onClose: () => void; onSaved: () => void }) {
+function DishDrawer({ initial, categories, onClose, onSaved }: { initial: Partial<Dish>; categories: string[]; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
     name: initial.name ?? "",
     category: initial.category ?? "",
@@ -500,7 +531,13 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
               <Field label="Short Code"><input className="input" value={form.short_code} onChange={(e) => setForm({ ...form, short_code: e.target.value })} placeholder="e.g. CB01" /></Field>
               <Field label="HSN / SAC Code"><input className="input" value={form.hsn_code} onChange={(e) => setForm({ ...form, hsn_code: e.target.value })} placeholder="e.g. 996331" /></Field>
             </div>
-            <Field label="Category *"><input className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Rice Items" /></Field>
+            <Field label="Category *">
+              <CategorySelect
+                categories={categories}
+                value={form.category}
+                onChange={(v) => setForm({ ...form, category: v })}
+              />
+            </Field>
             <Field label="Food type">
               <div className="flex gap-2">
                 {[{ v: true, l: "Veg", c: "#16A34A" }, { v: false, l: "Non-Veg", c: "#DC2626" }].map((o) => (
@@ -615,6 +652,59 @@ function DishDrawer({ initial, onClose, onSaved }: { initial: Partial<Dish>; onC
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><div className="text-xs font-semibold text-muted-foreground mb-1">{label}</div>{children}</div>;
+}
+
+/** Category dropdown populated from existing dishes, with an inline "add new" option. */
+function CategorySelect({ categories, value, onChange }: { categories: string[]; value: string; onChange: (v: string) => void }) {
+  const [extra, setExtra] = useState<string[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const all = useMemo(() => {
+    const set = new Set([...categories, ...extra]);
+    if (value) set.add(value);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [categories, extra, value]);
+
+  const confirmNew = () => {
+    const name = draft.trim();
+    if (!name) return;
+    setExtra((e) => (e.includes(name) ? e : [...e, name]));
+    onChange(name);
+    setDraft("");
+    setAdding(false);
+  };
+
+  return (
+    <div className="space-y-2">
+      <select
+        className="input"
+        value={adding ? "__new__" : value}
+        onChange={(e) => {
+          if (e.target.value === "__new__") { setAdding(true); return; }
+          setAdding(false);
+          onChange(e.target.value);
+        }}
+      >
+        <option value="">Select category…</option>
+        {all.map((c) => <option key={c} value={c}>{c}</option>)}
+        <option value="__new__">+ Add new category</option>
+      </select>
+      {adding && (
+        <div className="flex gap-2">
+          <input
+            autoFocus
+            className="input"
+            placeholder="New category name"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmNew(); } }}
+          />
+          <button type="button" onClick={confirmNew} className="h-[38px] px-3 shrink-0 rounded-md bg-[#0D9488] text-white text-xs font-semibold">Add</button>
+          <button type="button" onClick={() => { setAdding(false); setDraft(""); }} className="h-[38px] px-3 shrink-0 rounded-md border border-border text-xs font-semibold">Cancel</button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function RowEditor({ title, hint, rows, setRows }: {

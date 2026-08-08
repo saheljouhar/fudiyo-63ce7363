@@ -19,8 +19,9 @@ export const Route = createFileRoute("/_authenticated/orders")({
   head: () => ({ meta: [{ title: "Billing — Fudiyo" }] }),
 });
 
-interface Dish { id: string; name: string; category: string; price: number; is_available: boolean; description: string | null; photo_url: string | null; restaurant_id: string; channel_prices?: unknown; track_stock?: boolean }
-interface CartItem { id: string; name: string; price: number; qty: number; is_veg?: boolean; note?: string }
+interface Dish { id: string; name: string; category: string; price: number; is_available: boolean; description: string | null; photo_url: string | null; restaurant_id: string; channel_prices?: unknown; track_stock?: boolean; variants?: unknown }
+interface Variant { name: string; price: number }
+interface CartItem { id: string; dishId?: string; variant?: string; name: string; price: number; qty: number; is_veg?: boolean; note?: string }
 interface SavedCart { id: string; label: string; cart: CartItem[]; orderType: OrderType; at: string; code: string }
 interface TableRow { id: string; number: string; seats: number; status: string }
 interface ActiveOrder { id: string; table_id: string | null; total: number; items: CartItem[]; created_at: string; note: string | null }
@@ -31,9 +32,23 @@ type PostState = { kind: "none" } | { kind: "kot" | "billed"; billNo: number; sh
 
 const LS_GRID = "fudiyo.orders.grid";
 const LS_TOPBAR = "fudiyo.orders.topbar";
-const LS_SAVED = "fudiyo.orders.saved";
 const LS_CODE = "fudiyo.orders.activeCode";
 const LS_SOUND = "fudiyo.orders.notifSound";
+
+/** Configured variants for a dish (e.g. Half / Full). */
+function dishVariants(d: Dish): Variant[] {
+  const raw = Array.isArray(d.variants) ? (d.variants as Variant[]) : [];
+  return raw.filter((v) => v && String(v.name ?? "").trim());
+}
+
+function lineLabel(it: CartItem) {
+  return it.variant ? `${it.name} (${it.variant})` : it.name;
+}
+
+function codeFromNote(note: string | null): string | null {
+  const m = /Code:([A-Z0-9]{4})/.exec(note ?? "");
+  return m ? m[1] : null;
+}
 
 function genCode() {
   // 4-char alphanumeric uppercase (digits weighted for shorter feel)
@@ -90,11 +105,22 @@ function OrdersPage() {
   const [topBarMode, setTopBarMode] = useState<boolean>(() => (typeof window !== "undefined" ? localStorage.getItem(LS_TOPBAR) === "1" : false));
   const [gridOpen, setGridOpen] = useState(false);
   const [saved, setSaved] = useState<SavedCart[]>([]);
-  const savedLoaded = useRef(false);
-  useEffect(() => {
-    try { setSaved(JSON.parse(localStorage.getItem(LS_SAVED) || "[]")); } catch { /* ignore */ }
-    savedLoaded.current = true;
-  }, []);
+  const loadSavedCarts = async () => {
+    const { data } = await supabase
+      .from("saved_carts")
+      .select("id, label, cart, order_type, code, created_at")
+      .order("created_at", { ascending: true });
+    if (!data) return;
+    setSaved(data.map((r) => ({
+      id: r.id,
+      label: r.label,
+      cart: (Array.isArray(r.cart) ? r.cart : []) as unknown as CartItem[],
+      orderType: (r.order_type as OrderType) ?? "dine_in",
+      at: new Date(r.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+      code: r.code ?? "",
+    })));
+  };
+  useEffect(() => { void loadSavedCarts(); }, []);
   const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [noteFor, setNoteFor] = useState<CartItem | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
@@ -117,6 +143,10 @@ function OrdersPage() {
   useEffect(() => { localStorage.setItem(LS_SOUND, notifSound ? "1" : "0"); }, [notifSound]);
   const [confirmNew, setConfirmNew] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  // Items already sent to the kitchen for the table currently being served
+  const [baseItems, setBaseItems] = useState<CartItem[]>([]);
+  const [baseOrderIds, setBaseOrderIds] = useState<string[]>([]);
+  const [variantFor, setVariantFor] = useState<Dish | null>(null);
   const [lookup, setLookup] = useState("");
   const [printerOpen, setPrinterOpen] = useState(false);
 
@@ -125,7 +155,6 @@ function OrdersPage() {
 
   useEffect(() => { localStorage.setItem(LS_GRID, gridMode); }, [gridMode]);
   useEffect(() => { localStorage.setItem(LS_TOPBAR, topBarMode ? "1" : "0"); }, [topBarMode]);
-  useEffect(() => { if (savedLoaded.current) localStorage.setItem(LS_SAVED, JSON.stringify(saved)); }, [saved]);
   useEffect(() => { setTableNo(tableNum); }, [tableNum]);
 
   const loadDishes = async () => {
@@ -211,19 +240,28 @@ function OrdersPage() {
     return v != null && Number(v) > 0 ? Number(v) : Number(d.price);
   };
 
+  const addLine = (d: Dish, variant?: Variant) => {
+    const lineId = variant ? `${d.id}::${variant.name}` : d.id;
+    const price = variant ? Number(variant.price) || priceFor(d, orderType) : priceFor(d, orderType);
+    setCart((c) => {
+      const ex = c.find((x) => x.id === lineId);
+      if (ex) return c.map((x) => x.id === lineId ? { ...x, qty: x.qty + 1 } : x);
+      return [...c, { id: lineId, dishId: d.id, variant: variant?.name, name: d.name, price, qty: 1 }];
+    });
+  };
+
   const addToCart = (d: Dish) => {
     if (!d.is_available) return;
-    setCart((c) => {
-      const ex = c.find((x) => x.id === d.id);
-      if (ex) return c.map((x) => x.id === d.id ? { ...x, qty: x.qty + 1 } : x);
-      return [...c, { id: d.id, name: d.name, price: priceFor(d, orderType), qty: 1 }];
-    });
+    const vs = dishVariants(d);
+    if (vs.length > 0) { setVariantFor(d); return; }
+    addLine(d);
   };
 
   // Re-price the cart when the order type changes (dine-in / takeaway / delivery)
   useEffect(() => {
     setCart((c) => c.map((x) => {
-      const d = dishes.find((y) => y.id === x.id);
+      if (x.variant) return x;
+      const d = dishes.find((y) => y.id === (x.dishId ?? x.id));
       return d ? { ...x, price: priceFor(d, orderType) } : x;
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,14 +283,26 @@ function OrdersPage() {
     }
   };
 
-  const saveCart = () => {
+  const saveCart = async () => {
     if (cart.length === 0) return toast.error("Cart is empty");
     const at = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-    const id = `s_${Date.now()}`;
     const label = servingTable ? `T${servingTable.number} - ${at}` : `Cart - ${at}`;
-    setSaved((s) => [...s.filter((x) => x.id !== activeSavedId), { id, label, cart, orderType, at, code: orderCode }]);
+    const restaurantId = dishes[0]?.restaurant_id;
+    if (!restaurantId) return toast.error("No restaurant configured");
+    if (activeSavedId) await supabase.from("saved_carts").delete().eq("id", activeSavedId);
+    const { error } = await supabase.from("saved_carts").insert({
+      restaurant_id: restaurantId,
+      label,
+      cart: JSON.parse(JSON.stringify(cart)),
+      order_type: orderType,
+      code: orderCode,
+      table_id: servingTable?.id ?? null,
+      created_by: user?.id ?? null,
+    });
+    if (error) return toast.error(error.message);
     setActiveSavedId(null);
     setCart([]);
+    await loadSavedCarts();
     toast.success(`Order saved at ${at}`);
   };
 
@@ -261,9 +311,10 @@ function OrdersPage() {
     if (s.code) { setOrderCode(s.code); localStorage.setItem(LS_CODE, s.code); }
     setActiveSavedId(s.id);
   };
-  const removeSaved = (id: string) => {
+  const removeSaved = async (id: string) => {
     setSaved((arr) => arr.filter((x) => x.id !== id));
     setActiveSavedId((c) => (c === id ? null : c));
+    await supabase.from("saved_carts").delete().eq("id", id);
   };
 
   const occupiedTables = useMemo(() => {
@@ -289,6 +340,7 @@ function OrdersPage() {
     setCart([]); setMobile(""); setCustName(""); setTableNo(tableNum);
     setPay("cash"); setOrderType("dine_in"); setPost({ kind: "none" });
     setDeliveryPerson(""); setDeliveryPhone(""); setDeliveryAddr(""); setShowAddr(false);
+    setBaseItems([]); setBaseOrderIds([]);
     persistedRef.current = false;
     const c = await uniqueCode();
     setOrderCode(c);
@@ -325,6 +377,20 @@ function OrdersPage() {
   const send = async (kind: "kot" | "billed") => {
     if (cart.length === 0) return toast.error("Cart is empty");
     if (!orderCode) return toast.error("Order ID not ready");
+    // Only newly added items go to the kitchen when adding on to a running table order
+    const delta = cart
+      .map((it) => {
+        const prev = baseItems.find((b) => b.id === it.id);
+        return { ...it, qty: it.qty - (prev?.qty ?? 0) };
+      })
+      .filter((it) => it.qty > 0);
+    if (kind === "kot" && baseItems.length > 0 && delta.length === 0) {
+      return toast.error("No new items to send to the kitchen");
+    }
+    const outgoing = baseItems.length > 0 ? delta : cart;
+    const taxRate = subtotal > 0 ? tax / subtotal : 0;
+    const outSubtotal = outgoing.reduce((s, i) => s + i.price * i.qty, 0);
+    const outTax = outSubtotal * taxRate;
     setSending(true);
     const restaurantId = dishes[0]?.restaurant_id;
     const noteParts = [
@@ -344,8 +410,8 @@ function OrdersPage() {
       table_id: activeTableId,
       waiter_id: user?.id,
       waiter_name: name,
-      items: JSON.parse(JSON.stringify(cart)),
-      subtotal, tax, total, discount: 0,
+      items: JSON.parse(JSON.stringify(outgoing)),
+      subtotal: outSubtotal, tax: outTax, total: outSubtotal + outTax, discount: 0,
       order_type: orderType,
       status,
       payment_method: pay,
@@ -353,12 +419,15 @@ function OrdersPage() {
     }).select("id").maybeSingle();
     setSending(false);
     if (error) return toast.error(error.message);
+    if (kind === "billed" && baseOrderIds.length > 0) {
+      await supabase.from("orders").update({ status: "billed" }).in("id", baseOrderIds);
+    }
     if (activeTableId) {
       await supabase.from("tables").update({ status: kind === "kot" ? "occupied" : "available" }).eq("id", activeTableId);
     }
     // Auto-deduct stock for dishes flagged "Track Stock Count"
-    for (const line of cart) {
-      const d = dishes.find((x) => x.id === line.id);
+    for (const line of outgoing) {
+      const d = dishes.find((x) => x.id === (line.dishId ?? line.id));
       if (!d?.track_stock) continue;
       const { data: inv } = await supabase.from("inventory_items").select("id, quantity").ilike("name", d.name).maybeSingle();
       if (inv) {
@@ -371,9 +440,12 @@ function OrdersPage() {
       // Order completed — clear code so next view gets new ID
       localStorage.removeItem(LS_CODE);
       if (servingTable) setServingTable(null);
-      if (activeSavedId) { removeSaved(activeSavedId); }
+      setBaseItems([]); setBaseOrderIds([]);
+      if (activeSavedId) { void removeSaved(activeSavedId); }
     }
     if (kind === "kot" && activeTableId) {
+      setBaseItems(cart.map((x) => ({ ...x })));
+      if (data?.id) setBaseOrderIds((ids) => [...ids, data.id]);
       setJustTaken((v) => (v.includes(activeTableId) ? v : [...v, activeTableId]));
       await refreshTables();
       setShowTables(true);
@@ -407,6 +479,7 @@ function OrdersPage() {
     setActiveSavedId(null);
     setMobile(""); setCustName(""); setPay("cash"); setOrderType("dine_in");
     setDeliveryPerson(""); setDeliveryPhone(""); setDeliveryAddr(""); setShowAddr(false);
+    setBaseItems([]); setBaseOrderIds([]);
     persistedRef.current = false;
     const c = await uniqueCode();
     setOrderCode(c);
@@ -415,6 +488,49 @@ function OrdersPage() {
     setShowTables(false);
     setServingTable({ id: t.id, number: String(t.number) });
     toast.success(`Serving Table ${t.number}`);
+  };
+
+  /**
+   * Enter a table. If it already has an active (KOT-placed) order, its items are
+   * loaded into the cart so new items append to the same order; otherwise the
+   * cart is fully reset for a fresh order.
+   */
+  const enterTable = async (t: TableRow) => {
+    const { data } = await supabase
+      .from("orders")
+      .select("id, items, note, order_type, created_at")
+      .eq("table_id", t.id)
+      .in("status", ["pending", "cooking", "ready"])
+      .order("created_at", { ascending: true });
+    const rows = data ?? [];
+    if (rows.length === 0) { await pickTable(t); return; }
+
+    const existing: CartItem[] = [];
+    for (const r of rows) {
+      const items = (Array.isArray(r.items) ? r.items : []) as unknown as CartItem[];
+      for (const it of items) {
+        if (!it?.name) continue;
+        const key = it.id ?? `${it.name}::${it.variant ?? ""}`;
+        const ex = existing.find((x) => x.id === key);
+        if (ex) ex.qty += Number(it.qty) || 0;
+        else existing.push({ ...it, id: key, qty: Number(it.qty) || 0 });
+      }
+    }
+    setPost({ kind: "none" });
+    setActiveSavedId(null);
+    setDeliveryPerson(""); setDeliveryPhone(""); setDeliveryAddr(""); setShowAddr(false);
+    persistedRef.current = false;
+    setCart(existing);
+    setBaseItems(existing.map((x) => ({ ...x })));
+    setBaseOrderIds(rows.map((r) => r.id));
+    setOrderType(((rows[0].order_type as OrderType) ?? "dine_in"));
+    const code = codeFromNote(rows[0].note) ?? (await uniqueCode());
+    setOrderCode(code);
+    localStorage.setItem(LS_CODE, code);
+    setTableNo(String(t.number));
+    setServingTable({ id: t.id, number: String(t.number) });
+    setShowTables(false);
+    toast.success(`Loaded running order for Table ${t.number}`);
   };
 
   const categoryKeys = Object.keys(grouped);
@@ -451,12 +567,7 @@ function OrdersPage() {
             justTaken={justTaken}
             onPick={pickTable}
             onView={(t) => setDetailTable(t)}
-            onAdd={(t) => {
-              setCart([]); setPost({ kind: "none" }); setActiveSavedId(null);
-              setServingTable({ id: t.id, number: String(t.number) });
-              setTableNo(String(t.number));
-              setShowTables(false);
-            }}
+            onAdd={(t) => { void enterTable(t); }}
             onRefresh={refreshTables}
           />
         ) : (
@@ -678,7 +789,7 @@ function OrdersPage() {
                     <div className="flex items-start gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[13px] font-semibold text-[#111827] truncate">{it.name}</span>
+                          <span className="text-[13px] font-semibold text-[#111827] truncate">{lineLabel(it)}</span>
                           <span className="text-[9px] font-bold bg-[#16A34A] text-white px-1 rounded">V</span>
                         </div>
                         <div className="flex items-center justify-between mt-0.5">
@@ -755,16 +866,23 @@ function OrdersPage() {
         )}
       </div>
 
+      {variantFor && (
+        <VariantPickerModal
+          dish={variantFor}
+          onClose={() => setVariantFor(null)}
+          onConfirm={(v) => { addLine(variantFor, v); setVariantFor(null); }}
+        />
+      )}
+
       {detailTable && (
         <TableOrderDetailModal
           table={detailTable}
           orders={activeOrders.filter((o) => o.table_id === detailTable.id)}
           onClose={() => setDetailTable(null)}
           onAddItems={() => {
-            setServingTable({ id: detailTable.id, number: String(detailTable.number) });
-            setTableNo(String(detailTable.number));
+            const t = detailTable;
             setDetailTable(null);
-            setShowTables(false);
+            void enterTable(t);
           }}
         />
       )}
@@ -1158,7 +1276,7 @@ function DishGrid({ mode, dishes, cart, onAdd, onInc, onDec }: { mode: GridMode;
     return (
       <div className="space-y-1.5 pb-3">
         {dishes.map((d, i) => {
-          const inCart = cart.find((x) => x.id === d.id);
+          const inCart = dishVariants(d).length > 0 ? undefined : cart.find((x) => (x.dishId ?? x.id) === d.id);
           return (
             <div key={d.id} onClick={() => !inCart && d.is_available && onAdd(d)}
               className={`bg-white rounded-lg border border-[#E5E7EB] px-3 py-2 flex items-center gap-2 transition-all ${!d.is_available ? "opacity-50" : "cursor-pointer hover:shadow-md hover:scale-[1.01]"}`}>
@@ -1187,7 +1305,7 @@ function DishGrid({ mode, dishes, cart, onAdd, onInc, onDec }: { mode: GridMode;
     return (
       <div className="grid gap-4 pb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
         {dishes.map((d, i) => {
-          const inCart = cart.find((x) => x.id === d.id);
+          const inCart = dishVariants(d).length > 0 ? undefined : cart.find((x) => (x.dishId ?? x.id) === d.id);
           return (
             <div key={d.id} onClick={() => !inCart && d.is_available && onAdd(d)}
               className={`relative rounded-xl overflow-hidden border border-[#E5E7EB] bg-white h-[240px] transition-all ${!d.is_available ? "opacity-50" : "cursor-pointer hover:shadow-lg hover:scale-[1.02]"}`}>
@@ -1223,7 +1341,7 @@ function DishGrid({ mode, dishes, cart, onAdd, onInc, onDec }: { mode: GridMode;
   return (
     <div className="grid gap-3 pb-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
       {dishes.map((d, i) => {
-        const inCart = cart.find((x) => x.id === d.id);
+        const inCart = dishVariants(d).length > 0 ? undefined : cart.find((x) => (x.dishId ?? x.id) === d.id);
         return (
           <div key={d.id} onClick={() => !inCart && d.is_available && onAdd(d)}
             className={`rounded-xl border border-[#E5E7EB] bg-white overflow-hidden shadow-sm transition-all ${!d.is_available ? "opacity-50" : "cursor-pointer hover:shadow-lg hover:scale-[1.02]"}`}>
@@ -1362,6 +1480,36 @@ function PrinterSetupModal({ onClose }: { onClose: () => void }) {
           <button className="w-full text-left text-[12px] font-semibold text-[#0D9488] hover:underline pt-2">
             Advanced Print Settings (Receipt Layout, Logo, KOT Exclusion) →
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+/** Variant chooser shown before a multi-variant dish is added to the cart. */
+function VariantPickerModal({ dish, onClose, onConfirm }: { dish: Dish; onClose: () => void; onConfirm: (v: Variant) => void }) {
+  const [sel, setSel] = useState<string | null>(null);
+  const variants = dishVariants(dish);
+  const chosen = variants.find((v) => v.name === sel);
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-sm bg-white rounded-xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-[#E5E7EB]">
+          <div className="text-[15px] font-bold text-[#111827]">{dish.name}</div>
+          <div className="text-[12px] text-[#6B7280] mt-0.5">Choose an option</div>
+        </div>
+        <div className="p-4 space-y-2 max-h-[50vh] overflow-y-auto">
+          {variants.map((v) => (
+            <button key={v.name} onClick={() => setSel(v.name)}
+              className={`w-full h-12 px-4 rounded-lg border flex items-center justify-between text-[14px] transition-colors ${sel === v.name ? "border-[#0D9488] bg-[#F0FDFA] text-[#0D9488] font-bold" : "border-[#E5E7EB] hover:bg-[#F9FAFB]"}`}>
+              <span>{v.name}</span>
+              <span className="font-semibold">{formatINR(Number(v.price) || 0)}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 px-5 py-4 border-t border-[#E5E7EB] bg-[#F9FAFB]">
+          <button onClick={onClose} className="flex-1 h-11 rounded-lg border border-[#E5E7EB] bg-white text-[13px] font-semibold">Cancel</button>
+          <button disabled={!chosen} onClick={() => chosen && onConfirm(chosen)}
+            className="flex-1 h-11 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[13px] font-bold disabled:opacity-50">Add to Order</button>
         </div>
       </div>
     </div>

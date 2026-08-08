@@ -658,6 +658,67 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_carts: {
+        Row: {
+          cart: Json
+          code: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string
+          order_type: Database["public"]["Enums"]["order_type"]
+          restaurant_id: string
+          table_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          cart?: Json
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label: string
+          order_type?: Database["public"]["Enums"]["order_type"]
+          restaurant_id: string
+          table_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cart?: Json
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string
+          order_type?: Database["public"]["Enums"]["order_type"]
+          restaurant_id?: string
+          table_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_carts_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurant_status"
+            referencedColumns: ["restaurant_id"]
+          },
+          {
+            foreignKeyName: "saved_carts_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_carts_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "tables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shift_log: {
         Row: {
           closed_at: string | null
@@ -762,6 +823,7 @@ export type Database = {
           assigned_waiter_id: string | null
           floor: string
           id: string
+          layout: Json
           number: string
           occupied_since: string | null
           restaurant_id: string
@@ -773,6 +835,7 @@ export type Database = {
           assigned_waiter_id?: string | null
           floor?: string
           id?: string
+          layout?: Json
           number: string
           occupied_since?: string | null
           restaurant_id: string
@@ -784,6 +847,7 @@ export type Database = {
           assigned_waiter_id?: string | null
           floor?: string
           id?: string
+          layout?: Json
           number?: string
           occupied_since?: string | null
           restaurant_id?: string
