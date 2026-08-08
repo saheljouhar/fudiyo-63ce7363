@@ -1268,7 +1268,7 @@ function DishGrid({ mode, dishes, cart, onAdd, onInc, onDec }: { mode: GridMode;
     return (
       <div className="space-y-1.5 pb-3">
         {dishes.map((d, i) => {
-          const inCart = cart.find((x) => x.id === d.id);
+          const inCart = dishVariants(d).length > 0 ? undefined : cart.find((x) => (x.dishId ?? x.id) === d.id);
           return (
             <div key={d.id} onClick={() => !inCart && d.is_available && onAdd(d)}
               className={`bg-white rounded-lg border border-[#E5E7EB] px-3 py-2 flex items-center gap-2 transition-all ${!d.is_available ? "opacity-50" : "cursor-pointer hover:shadow-md hover:scale-[1.01]"}`}>
@@ -1297,7 +1297,7 @@ function DishGrid({ mode, dishes, cart, onAdd, onInc, onDec }: { mode: GridMode;
     return (
       <div className="grid gap-4 pb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
         {dishes.map((d, i) => {
-          const inCart = cart.find((x) => x.id === d.id);
+          const inCart = dishVariants(d).length > 0 ? undefined : cart.find((x) => (x.dishId ?? x.id) === d.id);
           return (
             <div key={d.id} onClick={() => !inCart && d.is_available && onAdd(d)}
               className={`relative rounded-xl overflow-hidden border border-[#E5E7EB] bg-white h-[240px] transition-all ${!d.is_available ? "opacity-50" : "cursor-pointer hover:shadow-lg hover:scale-[1.02]"}`}>
@@ -1333,7 +1333,7 @@ function DishGrid({ mode, dishes, cart, onAdd, onInc, onDec }: { mode: GridMode;
   return (
     <div className="grid gap-3 pb-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
       {dishes.map((d, i) => {
-        const inCart = cart.find((x) => x.id === d.id);
+        const inCart = dishVariants(d).length > 0 ? undefined : cart.find((x) => (x.dishId ?? x.id) === d.id);
         return (
           <div key={d.id} onClick={() => !inCart && d.is_available && onAdd(d)}
             className={`rounded-xl border border-[#E5E7EB] bg-white overflow-hidden shadow-sm transition-all ${!d.is_available ? "opacity-50" : "cursor-pointer hover:shadow-lg hover:scale-[1.02]"}`}>
