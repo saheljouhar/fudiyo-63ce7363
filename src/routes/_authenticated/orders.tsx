@@ -866,9 +866,16 @@ function OrdersPage() {
         )}
       </div>
 
+      {variantFor && (
+        <VariantPickerModal
+          dish={variantFor}
+          onClose={() => setVariantFor(null)}
+          onConfirm={(v) => { addLine(variantFor, v); setVariantFor(null); }}
+        />
+      )}
+
       {detailTable && (
         <TableOrderDetailModal
-*** move-marker-noop
           table={detailTable}
           orders={activeOrders.filter((o) => o.table_id === detailTable.id)}
           onClose={() => setDetailTable(null)}
