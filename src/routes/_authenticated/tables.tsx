@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { formatINR, elapsedMinutes } from "@/lib/format";
 import { toast } from "sonner";
+import { FloorLayoutEditor } from "@/components/tables/FloorLayoutEditor";
 
 type TableStatus = "available" | "occupied" | "bill_requested" | "reserved" | "cleaning";
 interface TableRow {
