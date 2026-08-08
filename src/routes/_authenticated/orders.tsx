@@ -1485,3 +1485,33 @@ function PrinterSetupModal({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+/** Variant chooser shown before a multi-variant dish is added to the cart. */
+function VariantPickerModal({ dish, onClose, onConfirm }: { dish: Dish; onClose: () => void; onConfirm: (v: Variant) => void }) {
+  const [sel, setSel] = useState<string | null>(null);
+  const variants = dishVariants(dish);
+  const chosen = variants.find((v) => v.name === sel);
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-sm bg-white rounded-xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-[#E5E7EB]">
+          <div className="text-[15px] font-bold text-[#111827]">{dish.name}</div>
+          <div className="text-[12px] text-[#6B7280] mt-0.5">Choose an option</div>
+        </div>
+        <div className="p-4 space-y-2 max-h-[50vh] overflow-y-auto">
+          {variants.map((v) => (
+            <button key={v.name} onClick={() => setSel(v.name)}
+              className={`w-full h-12 px-4 rounded-lg border flex items-center justify-between text-[14px] transition-colors ${sel === v.name ? "border-[#0D9488] bg-[#F0FDFA] text-[#0D9488] font-bold" : "border-[#E5E7EB] hover:bg-[#F9FAFB]"}`}>
+              <span>{v.name}</span>
+              <span className="font-semibold">{formatINR(Number(v.price) || 0)}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 px-5 py-4 border-t border-[#E5E7EB] bg-[#F9FAFB]">
+          <button onClick={onClose} className="flex-1 h-11 rounded-lg border border-[#E5E7EB] bg-white text-[13px] font-semibold">Cancel</button>
+          <button disabled={!chosen} onClick={() => chosen && onConfirm(chosen)}
+            className="flex-1 h-11 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[13px] font-bold disabled:opacity-50">Add to Order</button>
+        </div>
+      </div>
+    </div>
+  );
+}
