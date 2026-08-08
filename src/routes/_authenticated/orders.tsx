@@ -868,6 +868,7 @@ function OrdersPage() {
 
       {detailTable && (
         <TableOrderDetailModal
+*** move-marker-noop
           table={detailTable}
           orders={activeOrders.filter((o) => o.table_id === detailTable.id)}
           onClose={() => setDetailTable(null)}
