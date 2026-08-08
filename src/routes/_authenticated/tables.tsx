@@ -252,11 +252,7 @@ function TablesPage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-[#E2E8F0] bg-white p-16 text-center">
-              <LayoutTemplate className="size-12 mx-auto text-[#CBD5E1] mb-3" strokeWidth={1.5} />
-              <p className="text-[15px] font-semibold text-[#111827]">Floor Layout Editor</p>
-              <p className="text-[13px] text-[#6B7280] mt-1">Drag-and-drop layout view is coming soon.</p>
-            </div>
+            <FloorLayoutEditor tables={visible} floor={activeFloor} />
           )}
         </>
       ) : (
