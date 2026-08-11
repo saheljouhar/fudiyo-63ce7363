@@ -29,6 +29,7 @@ function Layout() {
 function LayoutInner() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const isOrders = path.startsWith("/orders");
+  const isKitchen = path.startsWith("/kitchen");
   const { collapsed, setCollapsed } = useSidebarDrawer();
   const lastWasOrders = useRef(false);
   // When entering /orders, default sidebar to closed (overlay drawer)
@@ -52,12 +53,12 @@ function LayoutInner() {
         className="min-h-screen"
         style={{ marginLeft: offset, transition: "margin-left 180ms ease" }}
       >
-        {!isOrders && (
+        {!isOrders && !isKitchen && (
           <div className="flex items-center justify-end px-4 md:px-6 pt-4">
             <AnnouncementBell />
           </div>
         )}
-        {!isOrders && <div className="px-6"><AnnouncementBanner /></div>}
+        {!isOrders && !isKitchen && <div className="px-6"><AnnouncementBanner /></div>}
         <Outlet />
       </div>
     </div>

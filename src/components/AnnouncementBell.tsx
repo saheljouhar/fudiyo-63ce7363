@@ -11,7 +11,7 @@ interface Ann {
   sent_by: string | null;
 }
 
-export function AnnouncementBell() {
+export function AnnouncementBell({ className }: { className?: string } = {}) {
   const { role, user } = useAuth();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -59,7 +59,7 @@ export function AnnouncementBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="size-9 rounded-md border border-border bg-card hover:bg-accent flex items-center justify-center text-muted-foreground"
+        className={className ?? "size-9 rounded-md border border-border bg-card hover:bg-accent flex items-center justify-center text-muted-foreground"}
         aria-label="Announcements"
       >
         <Bell className="size-4" />
