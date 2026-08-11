@@ -30,7 +30,50 @@ function statusColors(status: string) {
   return { bg: "#DCFCE7", border: "#16A34A", text: "#166534" };
 }
 
-export function FloorLayoutEditor({ tables, floor, onSaved }: { tables: LayoutTable[]; floor: string; onSaved?: () => void }) {
+/** Read-only positioned floor map shared by Table Management and Dashboard Billing. */
+export function FloorMapView({ tables, onTableClick, totals, height = CANVAS_H }: {
+  tables: LayoutTable[];
+  onTableClick?: (t: LayoutTable) => void;
+  totals?: Record<string, number>;
+  height?: number;
+}) {
+  return (
+    <div
+      className="relative rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] overflow-auto"
+      style={{ height, backgroundImage: "radial-gradient(#CBD5E1 1px, transparent 1px)", backgroundSize: "24px 24px" }}
+    >
+      {tables.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center text-[13px] text-[#94A3B8]">No tables on this floor yet.</div>
+      )}
+      {tables.map((t, i) => {
+        const l = readLayout(t, i);
+        const c = statusColors(t.status);
+        const tot = totals?.[t.id] ?? 0;
+        return (
+          <button
+            key={t.id}
+            onClick={() => onTableClick?.(t)}
+            className="absolute select-none flex flex-col items-center justify-center transition hover:shadow-lg"
+            style={{
+              left: l.x, top: l.y, width: l.w, height: l.h,
+              transform: `rotate(${l.rotation}deg)`,
+              background: c.bg,
+              border: `2px solid ${c.border}`,
+              borderRadius: l.shape === "circle" ? "9999px" : 12,
+              cursor: onTableClick ? "pointer" : "default",
+            }}
+          >
+            <span className="text-[14px] font-bold" style={{ color: c.text }}>{t.number}</span>
+            <span className="text-[11px]" style={{ color: c.text }}>{t.seats} seats</span>
+            {tot > 0 && <span className="text-[12px] font-bold" style={{ color: c.text }}>₹{tot.toLocaleString("en-IN")}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function FloorLayoutEditor({ tables, floor, onSaved, onTableClick }: { tables: LayoutTable[]; floor: string; onSaved?: () => void; onTableClick?: (t: LayoutTable) => void }) {
   const readOnly = floor === "all";
   const canvasRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState(false);
@@ -148,6 +191,7 @@ export function FloorLayoutEditor({ tables, floor, onSaved }: { tables: LayoutTa
           return (
             <div
               key={t.id}
+              onClick={() => { if (!editing) onTableClick?.(t); }}
               onPointerDown={(e) => {
                 if (!editing) return;
                 setSel(t.id);
@@ -161,7 +205,7 @@ export function FloorLayoutEditor({ tables, floor, onSaved }: { tables: LayoutTa
                 border: `2px solid ${isSel ? "#0D9488" : c.border}`,
                 borderRadius: l.shape === "circle" ? "9999px" : 12,
                 boxShadow: isSel ? "0 0 0 3px rgba(13,148,136,0.2)" : "none",
-                cursor: editing ? "move" : "default",
+                cursor: editing ? "move" : onTableClick ? "pointer" : "default",
               }}
             >
               <span className="text-[14px] font-bold" style={{ color: c.text }}>{t.number}</span>
