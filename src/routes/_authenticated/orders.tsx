@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
+import { FloorMapView } from "@/components/tables/FloorLayoutEditor";
 import { useSidebarDrawer } from "@/lib/sidebar";
 
 export const Route = createFileRoute("/_authenticated/orders")({
@@ -23,7 +24,7 @@ interface Dish { id: string; name: string; category: string; price: number; is_a
 interface Variant { name: string; price: number }
 interface CartItem { id: string; dishId?: string; variant?: string; name: string; price: number; qty: number; is_veg?: boolean; note?: string }
 interface SavedCart { id: string; label: string; cart: CartItem[]; orderType: OrderType; at: string; code: string }
-interface TableRow { id: string; number: string; seats: number; status: string }
+interface TableRow { id: string; number: string; seats: number; status: string; floor?: string; layout?: unknown }
 interface ActiveOrder { id: string; table_id: string | null; total: number; items: CartItem[]; created_at: string; note: string | null }
 type OrderType = "dine_in" | "takeaway" | "delivery";
 type PayMethod = "cash" | "upi" | "card";
@@ -163,7 +164,7 @@ function OrdersPage() {
   useEffect(() => {
     (async () => {
       await loadDishes();
-      const { data: tbls } = await supabase.from("tables").select("id, number, seats, status").order("number");
+      const { data: tbls } = await supabase.from("tables").select("id, number, seats, status, floor, layout").order("number");
       if (tbls) setTablesData(tbls as TableRow[]);
       if (tableId) {
         const { data: t } = await supabase.from("tables").select("number").eq("id", tableId).maybeSingle();
@@ -184,7 +185,7 @@ function OrdersPage() {
   }, []);
 
   const refreshTables = async () => {
-    const { data: tbls } = await supabase.from("tables").select("id, number, seats, status").order("number");
+    const { data: tbls } = await supabase.from("tables").select("id, number, seats, status, floor, layout").order("number");
     if (tbls) setTablesData(tbls as TableRow[]);
     const { data: ords } = await supabase
       .from("orders")
@@ -1069,38 +1070,25 @@ function TablesPreview({
       {tables.length === 0 ? (
         <div className="text-center text-[#6B7280] py-12 text-sm">No tables configured.</div>
       ) : view === "map" ? (
-        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))" }}>
-          {sortedTables.map((t) => {
-            const list = byTable[t.id] ?? [];
-            const occupied = t.status === "occupied" || list.length > 0;
-            const tot = list.reduce((s, o) => s + Number(o.total ?? 0), 0);
-            return (
-              <div key={t.id} className="relative">
-                <button
-                  onClick={() => (occupied ? setMapOpen((v) => (v === t.id ? null : t.id)) : onPick(t))}
-                  className={`w-full rounded-lg h-[76px] flex flex-col items-center justify-center border transition hover:shadow-md ${occupied ? "bg-[#FFFBEB] border-[#F59E0B]" : "bg-[#F0FDF4] border-[#16A34A]"}`}>
-                  <span className="text-[16px] font-bold text-[#111827]">T{t.number}</span>
-                  <span className="text-[11px] text-[#6B7280]">{t.seats} seats</span>
-                  {occupied && tot > 0 && <span className="text-[12px] font-bold text-[#B45309]">{formatINR(tot)}</span>}
-                </button>
-                {mapOpen === t.id && occupied && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setMapOpen(null)} />
-                    <div className="absolute z-40 left-1/2 -translate-x-1/2 top-full mt-1 w-[168px] bg-white rounded-xl border border-[#E5E7EB] shadow-lg p-2 space-y-1.5">
-                      <div className="text-[12px] font-bold text-[#111827] px-1">Table {t.number}</div>
-                      <button onClick={() => { setMapOpen(null); onView(t); }} className="w-full h-8 rounded-lg border border-[#E5E7EB] text-[#0D9488] text-[12px] font-semibold inline-flex items-center justify-center gap-1"><Eye className="size-3.5" /> View details</button>
-                      <div className="grid grid-cols-3 gap-1">
-                        <button onClick={() => { setMapOpen(null); onAdd(t); }} className="h-8 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-semibold">Add</button>
-                        <button onClick={() => { setMapOpen(null); onAdd(t); }} className="h-8 rounded-lg bg-[#F59E0B] hover:bg-[#D97706] text-white text-[11px] font-semibold">Bill</button>
-                        <button onClick={() => { setMapOpen(null); window.print(); }} className="h-8 rounded-lg border border-[#E5E7EB] text-[#374151] text-[11px] font-semibold inline-flex items-center justify-center"><Printer className="size-3.5" /></button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <FloorMapView
+          tables={sortedTables.map((t) => ({
+            id: t.id,
+            number: t.number,
+            floor: t.floor ?? "Ground Floor",
+            seats: t.seats,
+            status: (byTable[t.id]?.length ?? 0) > 0 ? "occupied" : t.status,
+            layout: t.layout,
+          }))}
+          totals={Object.fromEntries(
+            sortedTables.map((t) => [t.id, (byTable[t.id] ?? []).reduce((sum, o) => sum + Number(o.total ?? 0), 0)]),
+          )}
+          onTableClick={(lt) => {
+            const t = sortedTables.find((x) => x.id === lt.id);
+            if (!t) return;
+            const occupied = t.status === "occupied" || (byTable[t.id]?.length ?? 0) > 0;
+            occupied ? onView(t) : onPick(t);
+          }}
+        />
       ) : (
         <div className="grid gap-3 items-start" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(184px, 1fr))" }}>
           {sortedTables.map((t) => {
