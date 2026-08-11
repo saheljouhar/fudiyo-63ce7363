@@ -1,12 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check, ChevronLeft, ChevronRight, Calendar, Pencil, ArrowUp, ArrowDown, Timer, Merge, Users, LayoutGrid, LayoutTemplate, Settings as SettingsIcon, Sparkles, Ban } from "lucide-react";
+import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check, ChevronLeft, ChevronRight, Calendar, Pencil, ArrowUp, ArrowDown, Timer, Merge, Users, LayoutGrid, LayoutTemplate, Settings as SettingsIcon, Sparkles, Ban, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { formatINR, elapsedMinutes } from "@/lib/format";
 import { toast } from "sonner";
 import { FloorLayoutEditor } from "@/components/tables/FloorLayoutEditor";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type TableStatus = "available" | "occupied" | "bill_requested" | "reserved" | "cleaning";
 interface TableRow {
@@ -16,6 +17,7 @@ interface TableRow {
   seats: number;
   status: TableStatus;
   occupied_since: string | null;
+  layout?: unknown;
 }
 interface OrderTotal { table_id: string | null; total: number }
 
@@ -45,6 +47,7 @@ function TablesPage() {
   const [layoutView, setLayoutView] = useState<"grid" | "layout">("grid");
   const [tableMenu, setTableMenu] = useState<TableRow | null>(null);
   const [editingTable, setEditingTable] = useState<TableRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TableRow | null>(null);
 
   // ticking for elapsed time
   useEffect(() => {
@@ -118,9 +121,29 @@ function TablesPage() {
       .from("tables")
       .update({ status: "available", occupied_since: null })
       .neq("id", "00000000-0000-0000-0000-000000000000");
-    if (error) toast.error(error.message);
-    else toast.success("All tables reset");
+    if (error) {
+      toast.error(error.message);
+      setResetOpen(false);
+      return;
+    }
+    // Clear the live orders + parked carts that keep tables "occupied" on Dashboard Billing
+    await supabase
+      .from("orders")
+      .update({ status: "cleared" })
+      .in("status", ["pending", "cooking", "ready"])
+      .not("table_id", "is", null);
+    await supabase.from("saved_carts").delete().not("table_id", "is", null);
+    toast.success("All tables reset");
     setResetOpen(false);
+  };
+
+  const doDeleteTable = async () => {
+    const t = deleteTarget;
+    if (!t) return;
+    const { error } = await supabase.from("tables").delete().eq("id", t.id);
+    if (error) toast.error(error.message);
+    else toast.success(`Table ${t.number} deleted`);
+    setDeleteTarget(null);
   };
 
   return (
@@ -249,15 +272,31 @@ function TablesPage() {
                   onAdd={() => navigate({ to: "/orders", search: { table: t.id } as never })}
                   onBill={() => navigate({ to: "/history", search: { table: t.id } as never })}
                   onGear={() => setTableMenu(t)}
+                  onDelete={() => {
+                    if (t.status === "occupied" || t.status === "bill_requested") {
+                      toast.error("This table has an active order — clear it before deleting.");
+                      return;
+                    }
+                    setDeleteTarget(t);
+                  }}
                 />
               ))}
             </div>
           ) : (
-            <FloorLayoutEditor tables={visible} floor={activeFloor} />
+            <FloorLayoutEditor tables={visible} floor={activeFloor} onTableClick={(t) => { const row = tables.find((x) => x.id === t.id); if (row) setTableMenu(row); }} />
           )}
         </>
       ) : (
         <DeliverySection filter={deliveryFilter} setFilter={setDeliveryFilter} />
+      )}
+      {deleteTarget && (
+        <ConfirmDialog
+          title={`Delete Table ${deleteTarget.number}?`}
+          body="This removes the table from the floor grid and layout. This can’t be undone."
+          confirmLabel="Delete Table"
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={doDeleteTable}
+        />
       )}
     </main>
   );
@@ -338,10 +377,10 @@ function FloorTab({ active, onClick, label, count }: { active: boolean; onClick:
 }
 
 function TableCard({
-  table, total, onTake, onAdd, onBill, onGear,
+  table, total, onTake, onAdd, onBill, onGear, onDelete,
 }: {
   table: TableRow; total: number;
-  onTake: () => void; onAdd: () => void; onBill: () => void; onGear: () => void;
+  onTake: () => void; onAdd: () => void; onBill: () => void; onGear: () => void; onDelete: () => void;
 }) {
   const dot =
     table.status === "available" ? "bg-table-available" :
@@ -360,11 +399,14 @@ function TableCard({
 
   return (
     <div className={`relative rounded-xl border ${border} bg-card shadow-card p-3 flex flex-col`}>
+      <button onClick={onDelete} aria-label={`Delete table ${table.number}`} title="Delete table" className="absolute top-1.5 left-1.5 size-7 rounded-md inline-flex items-center justify-center text-[#9CA3AF] hover:text-[#DC2626] hover:bg-[#FEF2F2] z-10">
+        <Trash2 className="size-3.5" />
+      </button>
       <button onClick={onGear} aria-label="Table options" className="absolute top-1.5 right-1.5 size-7 rounded-md inline-flex items-center justify-center text-[#6B7280] hover:bg-[#F1F5F9] z-10">
         <SettingsIcon className="size-3.5" />
       </button>
       {/* header row */}
-      <div className="flex items-start justify-between mb-1 gap-2 pr-7">
+      <div className="flex items-start justify-between mb-1 gap-2 pr-7 pl-7">
         <span className="font-bold text-foreground">{table.number}</span>
         <div className="flex items-center gap-1 flex-wrap justify-end">
           {table.status === "occupied" && table.occupied_since && (
