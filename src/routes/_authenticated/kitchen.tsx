@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { itemLabel } from "@/lib/format";
 import {
@@ -7,6 +8,7 @@ import {
   ChevronDown, Printer, X, Play, Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AnnouncementBell } from "@/components/AnnouncementBell";
 
 export const Route = createFileRoute("/_authenticated/kitchen")({
   component: KitchenPage,
@@ -31,6 +33,37 @@ interface Order {
   round: number;
 }
 
+/** Stage colours reused by tabs, badges and move animations. */
+const STAGE_COLOR: Record<"pending" | "cooking" | "ready" | "billed", string> = {
+  pending: "#F59E0B",
+  cooking: "#3B82F6",
+  ready: "#16A34A",
+  billed: "#6B7280",
+};
+
+/** Drop internal tokens (order code, payment method) from the KOT note line. */
+function cleanNote(note: string | null): string {
+  if (!note) return "";
+  return note
+    .split(/\s{2,}|\|/)
+    .flatMap((chunk) => chunk.split(" "))
+    .filter((tok) => tok && !/^Code:/i.test(tok) && !/^Pay:/i.test(tok))
+    .join(" ")
+    .trim();
+}
+
+const COOK_LS = "fudiyo.kds.cookTimers";
+type CookTimer = { start: number; end?: number };
+function readCookTimers(): Record<string, CookTimer> {
+  if (typeof window === "undefined") return {};
+  try { return JSON.parse(localStorage.getItem(COOK_LS) ?? "{}") as Record<string, CookTimer>; } catch { return {}; }
+}
+function fmtDur(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60);
+  return m < 1 ? `${s}s` : `${m}m ${String(s % 60).padStart(2, "0")}s`;
+}
+
 function KitchenPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tables, setTables] = useState<Record<string, string>>({});
@@ -42,6 +75,7 @@ function KitchenPage() {
   const [dateFilter, setDateFilter] = useState<"today" | "24h" | "all">("today");
   const [dateOpen, setDateOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [cookTimers, setCookTimers] = useState<Record<string, CookTimer>>({});
   const seenRef = useRef<Set<string>>(new Set());
   const audioCtxRef = useRef<AudioContext | null>(null);
 
@@ -103,6 +137,7 @@ function KitchenPage() {
   }, []);
 
   useEffect(() => { localStorage.setItem("kds-muted", muted ? "1" : "0"); }, [muted]);
+  useEffect(() => { setCookTimers(readCookTimers()); }, []);
 
   const counts = useMemo(() => ({
     all: orders.filter((o) => o.status === "pending" || o.status === "cooking" || o.status === "ready").length,
@@ -128,6 +163,15 @@ function KitchenPage() {
   const advance = async (o: Order) => {
     const next: Status = o.status === "pending" ? "cooking" : o.status === "cooking" ? "ready" : "billed";
     const label = next === "cooking" ? "Moved to Cooking" : next === "ready" ? "Moved to Ready" : "Order Complete";
+    setCookTimers((prev) => {
+      const nextTimers = { ...prev };
+      if (next === "cooking") nextTimers[o.id] = { start: Date.now() };
+      if (next === "ready" && nextTimers[o.id] && !nextTimers[o.id].end) {
+        nextTimers[o.id] = { ...nextTimers[o.id], end: Date.now() };
+      }
+      try { localStorage.setItem(COOK_LS, JSON.stringify(nextTimers)); } catch {}
+      return nextTimers;
+    });
     setSplash((s) => ({ ...s, [o.id]: label }));
     setTimeout(() => setSplash((s) => { const n = { ...s }; delete n[o.id]; return n; }), 1500);
     const { error } = await supabase.from("orders").update({ status: next }).eq("id", o.id);
@@ -146,7 +190,7 @@ function KitchenPage() {
   ];
 
   return (
-    <div className="min-h-screen -mx-6 -mt-4 px-6 pt-5 pb-8 bg-[#111827] text-white">
+    <div className="min-h-screen -mx-6 px-6 pt-5 pb-8 bg-[#111827] text-white">
       {flash && <div className="fixed inset-0 z-50 bg-amber-400/30 pointer-events-none animate-pulse" />}
       <header className="flex items-center justify-between pb-4">
         <div className="flex items-center gap-3">
@@ -182,6 +226,7 @@ function KitchenPage() {
           <button onClick={() => setMuted((m) => !m)} title={muted ? "Unmute" : "Mute"} className="size-10 rounded-md border border-white/20 inline-flex items-center justify-center hover:bg-white/10">
             {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
           </button>
+          <AnnouncementBell className="size-10 rounded-md border border-white/20 inline-flex items-center justify-center text-white hover:bg-white/10" />
           <button onClick={() => void load()} disabled={refreshing} className="h-10 px-4 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] inline-flex items-center gap-2 text-sm font-semibold text-white disabled:opacity-70">
             <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
           </button>
@@ -216,7 +261,7 @@ function KitchenPage() {
           <p className="text-sm text-gray-500 mt-1">New orders will appear here when they come in.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 items-start">
           {dateFiltered.map((o, i) => (
             <KdsCard
               key={o.id}
@@ -224,6 +269,7 @@ function KitchenPage() {
               index={i + 1}
               tableNo={o.table_id ? tables[o.table_id] : null}
               splash={splash[o.id]}
+              cook={cookTimers[o.id]}
               onAdvance={() => advance(o)}
               onView={() => setDetail(o)}
             />
@@ -237,13 +283,15 @@ function KitchenPage() {
 }
 
 function KdsCard({
-  o, index, tableNo, splash, onAdvance, onView,
+  o, index, tableNo, splash, cook, onAdvance, onView,
 }: {
   o: Order; index: number; tableNo: string | null;
-  splash?: string; onAdvance: () => void; onView: () => void;
+  splash?: string; cook?: CookTimer; onAdvance: () => void; onView: () => void;
 }) {
   const [elapsed, setElapsed] = useState("0m");
+  const [cookElapsed, setCookElapsed] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const tick = () => {
       const s = Math.floor((Date.now() - new Date(o.created_at).getTime()) / 1000);
@@ -252,6 +300,13 @@ function KdsCard({
     };
     tick(); const id = setInterval(tick, 1000); return () => clearInterval(id);
   }, [o.created_at]);
+
+  useEffect(() => {
+    if (!cook) { setCookElapsed(""); return; }
+    if (cook.end) { setCookElapsed(fmtDur(cook.end - cook.start)); return; }
+    const tick = () => setCookElapsed(fmtDur(Date.now() - cook.start));
+    tick(); const id = setInterval(tick, 1000); return () => clearInterval(id);
+  }, [cook]);
 
   const meta =
     o.status === "pending"
@@ -263,11 +318,15 @@ function KdsCard({
       : { left: "border-l-gray-400", badge: "DONE", badgeCls: "bg-gray-200 text-gray-700", btn: null };
 
   const shortId = o.id.slice(0, 6).toUpperCase();
+  const nextStage: "cooking" | "ready" | "billed" =
+    o.status === "pending" ? "cooking" : o.status === "cooking" ? "ready" : "billed";
+  const splashColor = STAGE_COLOR[nextStage];
+  const note = cleanNote(o.note);
 
   return (
     <div className={`relative rounded-xl bg-white text-gray-900 border-l-4 ${meta.left} shadow-lg overflow-hidden`}>
       {splash && (
-        <div className="absolute inset-0 z-10 bg-[#16A34A] flex flex-col items-center justify-center text-white animate-in fade-in zoom-in duration-200">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center text-white animate-in fade-in zoom-in duration-200" style={{ backgroundColor: splashColor }}>
           <Check className="size-12" strokeWidth={3} />
           <div className="mt-2 text-base font-bold">{splash}</div>
         </div>
@@ -277,9 +336,16 @@ function KdsCard({
           <span className={`text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full ${meta.badgeCls}`}>{meta.badge}</span>
           <span className="text-base font-bold">#{index}</span>
           <span className="text-xs text-gray-500">{o.order_type === "dine_in" ? `Dine In${tableNo ? ` · T${tableNo}` : ""}` : o.order_type.replace("_", " ")}</span>
-          <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-[#16A34A] bg-[#16A34A]/10 px-2 py-0.5 rounded-full">
+          <span title="Order age" className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-[#16A34A] bg-[#16A34A]/10 px-2 py-0.5 rounded-full">
             ⏱ {elapsed}
           </span>
+          {cookElapsed && (
+            <span
+              title={cook?.end ? "Cooking time (final)" : "Cooking time"}
+              className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${cook?.end ? "text-[#3B82F6] bg-[#3B82F6]/10" : "text-[#F59E0B] bg-[#F59E0B]/10"}`}>
+              🔥 {cookElapsed}
+            </span>
+          )}
           <button onClick={onView} className="size-7 inline-flex items-center justify-center rounded hover:bg-gray-100 text-gray-500" title="View details">
             <Eye className="size-4" />
           </button>
@@ -295,33 +361,68 @@ function KdsCard({
               {it.note && <div className="text-[11px] text-amber-700">⚠ {it.note}</div>}
             </li>
           ))}
-          {o.note && <li className="py-1 text-[11px] text-amber-700">⚠ {o.note}</li>}
+          {note && <li className="py-1 text-[11px] text-amber-700">⚠ {note}</li>}
         </ul>
         {meta.btn && (
           <div className="flex items-center gap-2 mt-4">
             <button onClick={onAdvance} className={`flex-1 h-11 rounded-md inline-flex items-center justify-center gap-2 text-white font-bold text-sm tracking-wide transition ${meta.btn.cls}`}>
               {meta.btn.icon} {meta.btn.label}
             </button>
-            <div className="relative">
-              <button onClick={() => setMenuOpen((v) => !v)} className="size-11 rounded-md border border-gray-200 inline-flex items-center justify-center hover:bg-gray-50" title="More">
+            <div>
+              <button ref={menuBtnRef} onClick={() => setMenuOpen((v) => !v)} className="size-11 rounded-md border border-gray-200 inline-flex items-center justify-center hover:bg-gray-50" title="More">
                 <MoreVertical className="size-4 text-gray-500" />
               </button>
               {menuOpen && (
-                <>
-                  <button onClick={() => setMenuOpen(false)} className="fixed inset-0 z-10" aria-label="close" />
-                  <div className="absolute right-0 top-12 z-20 w-44 bg-white border border-gray-200 rounded-md shadow-lg py-1 text-sm text-gray-800">
-                    <MenuItem onClick={() => { setMenuOpen(false); onView(); }}>View Details</MenuItem>
-                    <MenuItem onClick={() => { setMenuOpen(false); window.print(); }}><Printer className="size-3.5" /> Print KOT</MenuItem>
-                    <MenuItem onClick={() => setMenuOpen(false)}>Cancel</MenuItem>
-                    <MenuItem onClick={() => setMenuOpen(false)} danger>Delete</MenuItem>
-                  </div>
-                </>
+                <FloatingMenu anchor={menuBtnRef.current} onClose={() => setMenuOpen(false)}>
+                  <MenuItem onClick={() => { setMenuOpen(false); onView(); }}>View Details</MenuItem>
+                  <MenuItem onClick={() => { setMenuOpen(false); window.print(); }}><Printer className="size-3.5" /> Print KOT</MenuItem>
+                  <MenuItem onClick={() => setMenuOpen(false)}>Cancel</MenuItem>
+                  <MenuItem onClick={() => setMenuOpen(false)} danger>Delete</MenuItem>
+                </FloatingMenu>
               )}
             </div>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+/** Viewport-aware dropdown rendered in a portal so tall cards never clip it. */
+function FloatingMenu({ anchor, onClose, children }: { anchor: HTMLElement | null; onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!anchor) return;
+    const place = () => {
+      const r = anchor.getBoundingClientRect();
+      const h = ref.current?.offsetHeight ?? 168;
+      const w = ref.current?.offsetWidth ?? 176;
+      const below = window.innerHeight - r.bottom;
+      const top = below >= h + 12 ? r.bottom + 6 : Math.max(8, r.top - h - 6);
+      const left = Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8);
+      setStyle({ top, left });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => { window.removeEventListener("scroll", place, true); window.removeEventListener("resize", place); };
+  }, [anchor]);
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <>
+      <button onClick={onClose} className="fixed inset-0 z-[70]" aria-label="Close menu" />
+      <div
+        ref={ref}
+        className="fixed z-[71] w-44 bg-white border border-gray-200 rounded-md shadow-xl py-1 text-sm text-gray-800"
+        style={{ top: style?.top ?? -9999, left: style?.left ?? -9999, visibility: style ? "visible" : "hidden" }}
+      >
+        {children}
+      </div>
+    </>,
+    document.body,
   );
 }
 
