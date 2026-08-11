@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { itemLabel } from "@/lib/format";
 import {
   Volume2, VolumeX, RefreshCw, Eye, MoreVertical, ChefHat, Check,
   ChevronDown, Printer, X, Play, Calendar,
