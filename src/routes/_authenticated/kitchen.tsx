@@ -18,7 +18,7 @@ const TAB_TO_STATUS: Record<Exclude<Tab, "all">, Status> = {
   new: "pending", cooking: "cooking", ready: "ready", done: "billed",
 };
 
-interface OrderItem { name: string; qty: number; note?: string }
+interface OrderItem { name: string; qty: number; note?: string; variant?: string }
 interface Order {
   id: string;
   table_id: string | null;
@@ -289,7 +289,7 @@ function KdsCard({
           {o.items.map((it, k) => (
             <li key={k} className="py-1.5 border-b last:border-b-0 border-gray-100">
               <div className="text-sm">
-                <span className="font-semibold text-gray-900">{it.qty}×</span> {it.name}
+                <span className="font-semibold text-gray-900">{it.qty}×</span> {itemLabel(it)}
               </div>
               {it.note && <div className="text-[11px] text-amber-700">⚠ {it.note}</div>}
             </li>
@@ -368,7 +368,7 @@ function DetailModal({ o, tableNo, onClose }: { o: Order; tableNo: string | null
           {o.items.map((it, i) => (
             <div key={i} className="flex items-center gap-3 py-2 border-b last:border-b-0">
               <div className="text-base font-bold w-8">{it.qty}×</div>
-              <div className="flex-1 text-sm">{it.name}</div>
+              <div className="flex-1 text-sm">{itemLabel(it)}</div>
               <span className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Main</span>
             </div>
           ))}

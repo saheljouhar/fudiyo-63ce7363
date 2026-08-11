@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatINR } from "@/lib/format";
+import { formatINR, itemLabel } from "@/lib/format";
 import {
   Search, Minus, Plus, Trash2, ShoppingCart, Mic, Bell, ClipboardList,
   Grid3x3, UtensilsCrossed, Flame, UserRound, Save, ChefHat, Menu as MenuIcon,
@@ -41,9 +41,7 @@ function dishVariants(d: Dish): Variant[] {
   return raw.filter((v) => v && String(v.name ?? "").trim());
 }
 
-function lineLabel(it: CartItem) {
-  return it.variant ? `${it.name} (${it.variant})` : it.name;
-}
+const lineLabel = itemLabel;
 
 function codeFromNote(note: string | null): string | null {
   const m = /Code:([A-Z0-9]{4})/.exec(note ?? "");
@@ -1154,7 +1152,7 @@ function TablesPreview({
                         <div className="space-y-0.5">
                           {bigItems.map((it, i) => (
                             <div key={i} className="flex items-center justify-between text-[12px] text-[#374151]">
-                              <span className="truncate pr-2">{it.name}</span>
+                              <span className="truncate pr-2">{lineLabel(it)}</span>
                               <span className="font-semibold text-[#111827] shrink-0">× {it.qty}</span>
                             </div>
                           ))}
@@ -1204,7 +1202,7 @@ function TableOrderDetailModal({
           {items.length === 0 && <div className="text-[13px] text-[#6B7280] text-center py-6">No items on this table.</div>}
           {items.map((it, i) => (
             <div key={i} className="flex items-center justify-between text-[13px]">
-              <span className="text-[#111827]">{it.name} <span className="text-[#6B7280]">× {it.qty}</span></span>
+              <span className="text-[#111827]">{lineLabel(it)} <span className="text-[#6B7280]">× {it.qty}</span></span>
               <span className="font-semibold text-[#111827]">{formatINR((it.price ?? 0) * it.qty)}</span>
             </div>
           ))}
@@ -1395,7 +1393,7 @@ Type: ${post.orderType.replace("_", "-")}
 
 Item          Qty  Note
 ----------------------
-${post.items.map((it) => `${pad(it.name, 13)} ${pad(String(it.qty), 4)} ${it.note || "—"}`).join("\n")}
+${post.items.map((it) => `${pad(lineLabel(it), 13)} ${pad(String(it.qty), 4)} ${it.note || "—"}`).join("\n")}
 ----------------------
    Thank you - Fudiyo KOT` : `--- BILL / INVOICE ---
    FUDIYO RESTAURANT
@@ -1408,7 +1406,7 @@ Payment: ${post.pay.toUpperCase()}
 
 Item          Qty   Amt
 -----------------------
-${post.items.map((it) => `${pad(it.name, 13)} ${pad(String(it.qty), 4)} ${formatINR(it.qty * it.price)}`).join("\n")}
+${post.items.map((it) => `${pad(lineLabel(it), 13)} ${pad(String(it.qty), 4)} ${formatINR(it.qty * it.price)}`).join("\n")}
 -----------------------
 Subtotal:    ${formatINR(post.subtotal)}
 GST (5%):    ${formatINR(post.tax)}

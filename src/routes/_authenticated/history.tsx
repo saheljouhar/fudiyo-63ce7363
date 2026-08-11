@@ -20,7 +20,7 @@ type Status = "pending" | "cooking" | "ready" | "billed" | "cleared" | "voided";
 type ViewMode = "list" | "grid";
 type Range = "today" | "yesterday" | "7d" | "30d";
 
-interface OrderItem { name: string; qty: number; price?: number; note?: string }
+interface OrderItem { name: string; qty: number; price?: number; note?: string; variant?: string }
 interface OrderRow {
   id: string;
   table_id: string | null;
@@ -53,7 +53,7 @@ function HistoryPage() {
         o.id, new Date(o.created_at).toLocaleString("en-IN"),
         o.waiter_name ?? "", o.order_type, o.status, o.payment_method ?? "",
         String(o.subtotal), String(o.tax), String(o.total),
-        o.items.map((i) => `${i.qty}x ${i.name}`).join("; "),
+        o.items.map((i) => `${i.qty}x ${itemLabel(i)}`).join("; "),
       ]);
     }
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -318,7 +318,7 @@ function OrderCard({ o, idx, expanded, onToggle, onAction }: { o: OrderRow; idx:
         </div>
         <ul className="space-y-0.5 text-[13px]">
           {itemsVisible.map((it, k) => (
-            <li key={k} className="flex justify-between text-[#374151]"><span>{it.qty}× {it.name}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>
+            <li key={k} className="flex justify-between text-[#374151]"><span>{it.qty}× {itemLabel(it)}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>
           ))}
           {!expanded && more > 0 && <li className="text-[12px] text-[#0D9488]">+{more} more...</li>}
         </ul>
@@ -391,7 +391,7 @@ function GridView({ orders, open, setOpen, onAction }: { orders: OrderRow[]; ope
                 {expanded && (
                   <tr className="bg-[#F9FAFB]"><td colSpan={9} className="p-4">
                     <ul className="space-y-0.5 text-[13px]">
-                      {o.items.map((it, k) => <li key={k} className="flex justify-between"><span>{it.qty}× {it.name}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>)}
+                      {o.items.map((it, k) => <li key={k} className="flex justify-between"><span>{it.qty}× {itemLabel(it)}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>)}
                     </ul>
                   </td></tr>
                 )}
@@ -843,12 +843,12 @@ export function printReceipt(html: string) {
 
 function renderBillHTML(o: OrderRow) {
   const code = (o.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1] ?? o.id.slice(0, 4).toUpperCase();
-  const rows = o.items.map((it) => `<tr><td>${it.qty}× ${it.name}</td><td class="r">${formatINR((it.price ?? 0) * it.qty)}</td></tr>`).join("");
+  const rows = o.items.map((it) => `<tr><td>${it.qty}× ${itemLabel(it)}</td><td class="r">${formatINR((it.price ?? 0) * it.qty)}</td></tr>`).join("");
   return `<h2>Fudiyo — Bill</h2><div>Order #${code}</div><div>${new Date(o.created_at).toLocaleString("en-IN")}</div><div>Type: ${o.order_type}</div><div class="b"></div><table>${rows}</table><div class="b"></div><table><tr><td>Subtotal</td><td class="r">${formatINR(Number(o.subtotal))}</td></tr><tr><td>Tax</td><td class="r">${formatINR(Number(o.tax))}</td></tr><tr><td><b>Total</b></td><td class="r"><b>${formatINR(Number(o.total))}</b></td></tr></table><div class="b"></div><div>Payment: ${o.payment_method ?? "—"}</div><div style="text-align:center;margin-top:10px">Thank you!</div>`;
 }
 function renderKotHTML(o: OrderRow) {
   const code = (o.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1] ?? o.id.slice(0, 4).toUpperCase();
-  const rows = o.items.map((it) => `<tr><td>${it.qty}×</td><td>${it.name}${it.note ? `<div style="font-size:11px;color:#555">${it.note}</div>` : ""}</td></tr>`).join("");
+  const rows = o.items.map((it) => `<tr><td>${it.qty}×</td><td>${itemLabel(it)}${it.note ? `<div style="font-size:11px;color:#555">${it.note}</div>` : ""}</td></tr>`).join("");
   return `<h2>KOT #${code}</h2><div>${new Date(o.created_at).toLocaleString("en-IN")}</div><div>${o.waiter_name ?? "Waiter"} · ${o.order_type}</div><div class="b"></div><table>${rows}</table>`;
 }
 
@@ -878,7 +878,7 @@ function ViewModal({ order, onClose }: { order: OrderRow; onClose: () => void })
             <table className="w-full text-[13px]">
               <thead className="bg-[#F9FAFB] text-[11px] uppercase text-[#6B7280]"><tr><th className="text-left px-3 py-2">Item</th><th className="text-right px-3 py-2">Qty</th><th className="text-right px-3 py-2">Price</th><th className="text-right px-3 py-2">Total</th></tr></thead>
               <tbody>{order.items.map((it, i) => (
-                <tr key={i} className="border-t border-[#F1F5F9]"><td className="px-3 py-2">{it.name}{it.note ? <div className="text-[11px] text-[#6B7280]">{it.note}</div> : null}</td><td className="px-3 py-2 text-right">{it.qty}</td><td className="px-3 py-2 text-right">{formatINR(it.price ?? 0)}</td><td className="px-3 py-2 text-right">{formatINR((it.price ?? 0) * it.qty)}</td></tr>
+                <tr key={i} className="border-t border-[#F1F5F9]"><td className="px-3 py-2">{itemLabel(it)}{it.note ? <div className="text-[11px] text-[#6B7280]">{it.note}</div> : null}</td><td className="px-3 py-2 text-right">{it.qty}</td><td className="px-3 py-2 text-right">{formatINR(it.price ?? 0)}</td><td className="px-3 py-2 text-right">{formatINR((it.price ?? 0) * it.qty)}</td></tr>
               ))}</tbody>
             </table>
           </div>
@@ -1003,7 +1003,7 @@ function EditDetailsModal({ order, onClose }: { order: OrderRow; onClose: () => 
           <div className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-2">Items ({order.items.length})</div>
           <ul className="space-y-1 text-[13px] max-h-[140px] overflow-y-auto">
             {order.items.map((it, i) => (
-              <li key={i} className="flex justify-between text-[#374151]"><span>{it.qty}× {it.name}</span><span className="font-semibold text-[#111827]">{formatINR((it.price ?? 0) * it.qty)}</span></li>
+              <li key={i} className="flex justify-between text-[#374151]"><span>{it.qty}× {itemLabel(it)}</span><span className="font-semibold text-[#111827]">{formatINR((it.price ?? 0) * it.qty)}</span></li>
             ))}
           </ul>
         </div>
@@ -1173,7 +1173,7 @@ function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => vo
             {cart.map((it, i) => (
               <div key={i} className="border border-[#E5E7EB] rounded-lg p-2">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0"><div className="text-[13px] font-semibold text-[#111827] truncate">{it.name}</div><div className="text-[12px] text-[#6B7280]">{formatINR(it.price ?? 0)}</div></div>
+                  <div className="min-w-0"><div className="text-[13px] font-semibold text-[#111827] truncate">{itemLabel(it)}</div><div className="text-[12px] text-[#6B7280]">{formatINR(it.price ?? 0)}</div></div>
                   <button onClick={() => del(i)} className="text-[#DC2626] hover:bg-[#FEE2E2] rounded p-1"><Trash2 className="size-3.5" /></button>
                 </div>
                 <div className="flex items-center justify-between mt-2">
