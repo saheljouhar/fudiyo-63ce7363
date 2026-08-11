@@ -31,3 +31,8 @@ export function elapsedMinutes(since: string | Date): string {
   if (mins < 60) return `${mins}m`;
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
+
+/** Display label for an order line: "Burger (Big)" when a variant was chosen. */
+export function itemLabel(it: { name: string; variant?: string | null }): string {
+  return it?.variant ? `${it.name} (${it.variant})` : it?.name ?? "";
+}
