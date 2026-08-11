@@ -1038,7 +1038,6 @@ function TablesPreview({
     for (const o of orders) if (o.table_id) (m[o.table_id] ||= []).push(o);
     return m;
   }, [orders]);
-  const [mapOpen, setMapOpen] = useState<string | null>(null);
   const sortedTables = useMemo(() => {
     const num = (s: string) => {
       const m = String(s).match(/\d+/);
