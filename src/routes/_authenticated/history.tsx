@@ -10,7 +10,7 @@ import {
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/history")({
-  validateSearch: (s: Record<string, unknown>) => ({ table: (s.table as string) ?? undefined }),
+  validateSearch: (s: Record<string, unknown>): { table?: string } => ({ table: (s.table as string) ?? undefined }),
   component: HistoryPage,
   head: () => ({ meta: [{ title: "Orders — Fudiyo" }] }),
 });

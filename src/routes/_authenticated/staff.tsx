@@ -8,7 +8,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/_authenticated/staff")({
   component: StaffPage,
   head: () => ({ meta: [{ title: "Staff — Fudiyo" }] }),
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { tab?: "accounts" | "attendance" | "shifts" } => ({
     tab: (s.tab as "accounts" | "attendance" | "shifts" | undefined) ?? undefined,
   }),
 });

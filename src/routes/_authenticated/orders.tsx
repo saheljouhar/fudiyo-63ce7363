@@ -15,7 +15,7 @@ import { FloorMapView } from "@/components/tables/FloorLayoutEditor";
 import { useSidebarDrawer } from "@/lib/sidebar";
 
 export const Route = createFileRoute("/_authenticated/orders")({
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { table?: string; order?: string } => ({
     table: (s.table as string) ?? undefined,
     order: (s.order as string) ?? undefined,
   }),
