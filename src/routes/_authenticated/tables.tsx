@@ -377,10 +377,11 @@ function FloorTab({ active, onClick, label, count }: { active: boolean; onClick:
 }
 
 function TableCard({
-  table, total, onTake, onAdd, onBill, onGear, onDelete,
+  table, total, onTake, onAdd, onBill, onGear, onDelete, onMakeAvailable,
 }: {
   table: TableRow; total: number;
   onTake: () => void; onAdd: () => void; onBill: () => void; onGear: () => void; onDelete: () => void;
+  onMakeAvailable: () => void;
 }) {
   const dot =
     table.status === "available" ? "bg-table-available" :
@@ -477,6 +478,14 @@ function TableCard({
           className="w-full text-xs font-semibold py-2 rounded-md bg-cta text-cta-foreground hover:bg-cta-hover"
         >
           Generate Bill
+        </button>
+      )}
+      {(table.status === "cleaning" || (table.status as string) === "out_of_service") && (
+        <button
+          onClick={onMakeAvailable}
+          className="w-full text-xs font-semibold py-2 rounded-md bg-[#16A34A] hover:bg-[#15803D] text-white inline-flex items-center justify-center gap-1"
+        >
+          <Check className="size-3.5" /> Make Available
         </button>
       )}
     </div>
