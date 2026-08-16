@@ -9,7 +9,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
   head: () => ({ meta: [{ title: "Settings — Fudiyo" }] }),
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { tab?: Tab } => ({
     tab: (s.tab as Tab | undefined) ?? undefined,
   }),
 });

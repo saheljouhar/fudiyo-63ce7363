@@ -146,6 +146,15 @@ function TablesPage() {
     setDeleteTarget(null);
   };
 
+  const makeAvailable = async (t: TableRow) => {
+    const { error } = await supabase
+      .from("tables")
+      .update({ status: "available", occupied_since: null })
+      .eq("id", t.id);
+    if (error) toast.error(error.message);
+    else toast.success(`Table ${t.number} is now available`);
+  };
+
   return (
     <main className="p-6 max-w-[1600px] mx-auto">
       <PageHeader
@@ -183,6 +192,7 @@ function TablesPage() {
             toast.success(`Marked ${s === "cleaning" ? "for cleaning" : "out of service"}`);
             setTableMenu(null);
           }}
+          onMakeAvailable={async () => { const t = tableMenu; setTableMenu(null); await makeAvailable(t); }}
           onBook={() => { setTableMenu(null); setBookOpen(true); }}
         />
       )}
@@ -272,6 +282,7 @@ function TablesPage() {
                   onAdd={() => navigate({ to: "/orders", search: { table: t.id } as never })}
                   onBill={() => navigate({ to: "/history", search: { table: t.id } as never })}
                   onGear={() => setTableMenu(t)}
+                  onMakeAvailable={() => void makeAvailable(t)}
                   onDelete={() => {
                     if (t.status === "occupied" || t.status === "bill_requested") {
                       toast.error("This table has an active order — clear it before deleting.");
@@ -377,10 +388,11 @@ function FloorTab({ active, onClick, label, count }: { active: boolean; onClick:
 }
 
 function TableCard({
-  table, total, onTake, onAdd, onBill, onGear, onDelete,
+  table, total, onTake, onAdd, onBill, onGear, onDelete, onMakeAvailable,
 }: {
   table: TableRow; total: number;
   onTake: () => void; onAdd: () => void; onBill: () => void; onGear: () => void; onDelete: () => void;
+  onMakeAvailable: () => void;
 }) {
   const dot =
     table.status === "available" ? "bg-table-available" :
@@ -477,6 +489,14 @@ function TableCard({
           className="w-full text-xs font-semibold py-2 rounded-md bg-cta text-cta-foreground hover:bg-cta-hover"
         >
           Generate Bill
+        </button>
+      )}
+      {(table.status === "cleaning" || (table.status as string) === "out_of_service") && (
+        <button
+          onClick={onMakeAvailable}
+          className="w-full text-xs font-semibold py-2 rounded-md bg-[#16A34A] hover:bg-[#15803D] text-white inline-flex items-center justify-center gap-1"
+        >
+          <Check className="size-3.5" /> Make Available
         </button>
       )}
     </div>
@@ -844,10 +864,11 @@ function PlaceholderModal({ title, body, onClose }: { title: string; body: strin
 }
 
 function TableActionModal({
-  table, onClose, onTakeOrder, onEdit, onStatus, onBook,
+  table, onClose, onTakeOrder, onEdit, onStatus, onBook, onMakeAvailable,
 }: {
   table: TableRow; onClose: () => void; onTakeOrder: () => void; onEdit: () => void;
   onStatus: (s: "cleaning" | "out_of_service") => void; onBook: () => void;
+  onMakeAvailable: () => void;
 }) {
   return (
     <ModalShell onClose={onClose}>
@@ -879,7 +900,8 @@ function TableActionModal({
 
         <div>
           <div className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-2">Status</div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
+            <button onClick={onMakeAvailable} className="h-10 rounded-md border border-[#16A34A] text-[#15803D] hover:bg-[#DCFCE7] text-[12px] font-semibold inline-flex items-center justify-center gap-1"><Check className="size-3.5" /> Make Available</button>
             <button onClick={() => onStatus("cleaning")} className="h-10 rounded-md border border-[#F59E0B] text-[#B45309] hover:bg-[#FEF3C7] text-[12px] font-semibold">Mark Cleaning</button>
             <button onClick={() => onStatus("out_of_service")} className="h-10 rounded-md border border-[#9CA3AF] text-[#4B5563] hover:bg-[#F3F4F6] text-[12px] font-semibold inline-flex items-center justify-center gap-1"><Ban className="size-3.5" /> Out of Service</button>
           </div>

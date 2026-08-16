@@ -1,16 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR, itemLabel } from "@/lib/format";
 import {
   Receipt, ChevronDown, ChevronUp, Printer, Eye, Pencil, RotateCcw, Pause,
   Calendar, ClipboardList, LayoutGrid, List, BarChart3, Search, Copy, Check,
-  FileSpreadsheet, ArrowUpDown, Plus, X, Minus, Trash2, Download,
+  FileSpreadsheet, ArrowUpDown, Plus, X, Minus, Trash2, Download, Play, Ban, Utensils,
 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/history")({
-  validateSearch: (s: Record<string, unknown>) => ({ table: (s.table as string) ?? undefined }),
+  validateSearch: (s: Record<string, unknown>): { table?: string } => ({ table: (s.table as string) ?? undefined }),
   component: HistoryPage,
   head: () => ({ meta: [{ title: "Orders — Fudiyo" }] }),
 });
@@ -41,6 +41,13 @@ function HistoryPage() {
   const [view, setView] = useState<ViewMode>("list");
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [me, setMe] = useState<string | null>(null);
+  const [tablesMap, setTablesMap] = useState<Record<string, { number: string; floor: string | null }>>({});
+
+  useEffect(() => {
+    void supabase.from("tables").select("id, number, floor").then(({ data }) => {
+      if (data) setTablesMap(Object.fromEntries(data.map((t) => [t.id, { number: String(t.number), floor: t.floor ?? null }])));
+    });
+  }, []);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
@@ -112,7 +119,7 @@ function HistoryPage() {
         })}
       </div>
 
-      {tab === "orders" && <OrdersTab orders={orders} view={view} me={me} />}
+      {tab === "orders" && <OrdersTab orders={orders} view={view} me={me} tablesMap={tablesMap} />}
       {tab === "scheduled" && <ScheduledTab />}
       {tab === "summary" && <SummaryTab orders={orders} />}
       {tab === "bookings" && <BookingsEmbed />}
@@ -122,7 +129,7 @@ function HistoryPage() {
 
 /* ---------------- Orders Tab ---------------- */
 
-function OrdersTab({ orders, view, me }: { orders: OrderRow[]; view: ViewMode; me: string | null }) {
+function OrdersTab({ orders, view, me, tablesMap }: { orders: OrderRow[]; view: ViewMode; me: string | null; tablesMap: Record<string, { number: string; floor: string | null }> }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
   const [type, setType] = useState<string>("all");
@@ -245,7 +252,7 @@ function OrdersTab({ orders, view, me }: { orders: OrderRow[]; view: ViewMode; m
           {filtered.length === 0 ? (
             <Empty label="No orders in this range" />
           ) : filtered.map((o, idx) => (
-            <OrderCard key={o.id} o={o} idx={idx + 1} expanded={open.has(o.id)} onToggle={() => setOpen((s) => { const n = new Set(s); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n; })} onAction={onAction} />
+            <OrderCard key={o.id} o={o} idx={idx + 1} tablesMap={tablesMap} expanded={open.has(o.id)} onToggle={() => setOpen((s) => { const n = new Set(s); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n; })} onAction={onAction} />
           ))}
         </div>
       ) : (
@@ -256,11 +263,12 @@ function OrdersTab({ orders, view, me }: { orders: OrderRow[]; view: ViewMode; m
       {active?.kind === "refund" && <RefundModal order={active.order} onClose={() => setActive(null)} />}
       {active?.kind === "edit-details" && <EditDetailsModal order={active.order} onClose={() => setActive(null)} />}
       {active?.kind === "edit-items" && <EditItemsModal order={active.order} onClose={() => setActive(null)} />}
+      {active?.kind === "complete" && <CompleteBillingModal order={active.order} tablesMap={tablesMap} onClose={() => setActive(null)} />}
     </>
   );
 }
 
-type ActionKind = "view" | "print-bill" | "print-kot" | "refund" | "edit-details" | "edit-items";
+type ActionKind = "view" | "print-bill" | "print-kot" | "refund" | "edit-details" | "edit-items" | "complete";
 
 function StatCard({ tint, iconBg, label, value, sub, icon }: { tint: string; iconBg: string; label: string; value: string; sub?: string; icon: string }) {
   return (
