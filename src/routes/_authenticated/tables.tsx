@@ -155,15 +155,6 @@ function TablesPage() {
     else toast.success(`Table ${t.number} is now available`);
   };
 
-  const _unusedDeleteTable = async () => {
-    const t = deleteTarget;
-    if (!t) return;
-    const { error } = await supabase.from("tables").delete().eq("id", t.id);
-    if (error) toast.error(error.message);
-    else toast.success(`Table ${t.number} deleted`);
-    setDeleteTarget(null);
-  };
-
   return (
     <main className="p-6 max-w-[1600px] mx-auto">
       <PageHeader
