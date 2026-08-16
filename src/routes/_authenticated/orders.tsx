@@ -15,7 +15,10 @@ import { FloorMapView } from "@/components/tables/FloorLayoutEditor";
 import { useSidebarDrawer } from "@/lib/sidebar";
 
 export const Route = createFileRoute("/_authenticated/orders")({
-  validateSearch: (s: Record<string, unknown>) => ({ table: (s.table as string) ?? undefined }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    table: (s.table as string) ?? undefined,
+    order: (s.order as string) ?? undefined,
+  }),
   component: OrdersPage,
   head: () => ({ meta: [{ title: "Billing — Fudiyo" }] }),
 });
@@ -72,7 +75,7 @@ async function uniqueCode(): Promise<string> {
 }
 
 function OrdersPage() {
-  const { table: tableId } = Route.useSearch();
+  const { table: tableId, order: orderId } = Route.useSearch();
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const { user, name } = useAuth();
@@ -531,6 +534,52 @@ function OrdersPage() {
     setShowTables(false);
     toast.success(`Loaded running order for Table ${t.number}`);
   };
+
+  /**
+   * Deep links: /orders?table=<id> enters that table (loading any running order),
+   * /orders?order=<id> loads that order's items into the cart for editing.
+   */
+  const autoEnterRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (tablesData.length === 0) return;
+    const key = orderId ? `o:${orderId}` : tableId ? `t:${tableId}` : null;
+    if (!key || autoEnterRef.current === key) return;
+    autoEnterRef.current = key;
+    void (async () => {
+      if (orderId) {
+        const { data: o } = await supabase
+          .from("orders")
+          .select("id, table_id, items, note, order_type")
+          .eq("id", orderId)
+          .maybeSingle();
+        if (!o) return;
+        if (o.table_id) {
+          const t = tablesData.find((x) => x.id === o.table_id);
+          if (t) { await enterTable(t); return; }
+        }
+        const raw = (Array.isArray(o.items) ? o.items : []) as unknown as CartItem[];
+        const norm = raw
+          .filter((it) => it?.name)
+          .map((it) => ({ ...it, id: it.id ?? `${it.name}::${it.variant ?? ""}`, qty: Number(it.qty) || 0 }));
+        setPost({ kind: "none" });
+        setActiveSavedId(null);
+        persistedRef.current = false;
+        setCart(norm);
+        setBaseItems(norm.map((x) => ({ ...x })));
+        setBaseOrderIds([o.id]);
+        setOrderType((o.order_type as OrderType) ?? "dine_in");
+        const c = codeFromNote(o.note) ?? (await uniqueCode());
+        setOrderCode(c);
+        localStorage.setItem(LS_CODE, c);
+        setShowTables(false);
+        toast.success("Order loaded for editing");
+        return;
+      }
+      const t = tablesData.find((x) => x.id === tableId);
+      if (t) await enterTable(t);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableId, orderId, tablesData]);
 
   const categoryKeys = Object.keys(grouped);
 
