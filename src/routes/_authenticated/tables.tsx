@@ -146,6 +146,24 @@ function TablesPage() {
     setDeleteTarget(null);
   };
 
+  const makeAvailable = async (t: TableRow) => {
+    const { error } = await supabase
+      .from("tables")
+      .update({ status: "available", occupied_since: null })
+      .eq("id", t.id);
+    if (error) toast.error(error.message);
+    else toast.success(`Table ${t.number} is now available`);
+  };
+
+  const _unusedDeleteTable = async () => {
+    const t = deleteTarget;
+    if (!t) return;
+    const { error } = await supabase.from("tables").delete().eq("id", t.id);
+    if (error) toast.error(error.message);
+    else toast.success(`Table ${t.number} deleted`);
+    setDeleteTarget(null);
+  };
+
   return (
     <main className="p-6 max-w-[1600px] mx-auto">
       <PageHeader
@@ -272,6 +290,7 @@ function TablesPage() {
                   onAdd={() => navigate({ to: "/orders", search: { table: t.id } as never })}
                   onBill={() => navigate({ to: "/history", search: { table: t.id } as never })}
                   onGear={() => setTableMenu(t)}
+                  onMakeAvailable={() => void makeAvailable(t)}
                   onDelete={() => {
                     if (t.status === "occupied" || t.status === "bill_requested") {
                       toast.error("This table has an active order — clear it before deleting.");
