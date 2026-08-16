@@ -192,6 +192,7 @@ function TablesPage() {
             toast.success(`Marked ${s === "cleaning" ? "for cleaning" : "out of service"}`);
             setTableMenu(null);
           }}
+          onMakeAvailable={async () => { const t = tableMenu; setTableMenu(null); await makeAvailable(t); }}
           onBook={() => { setTableMenu(null); setBookOpen(true); }}
         />
       )}
@@ -863,10 +864,11 @@ function PlaceholderModal({ title, body, onClose }: { title: string; body: strin
 }
 
 function TableActionModal({
-  table, onClose, onTakeOrder, onEdit, onStatus, onBook,
+  table, onClose, onTakeOrder, onEdit, onStatus, onBook, onMakeAvailable,
 }: {
   table: TableRow; onClose: () => void; onTakeOrder: () => void; onEdit: () => void;
   onStatus: (s: "cleaning" | "out_of_service") => void; onBook: () => void;
+  onMakeAvailable: () => void;
 }) {
   return (
     <ModalShell onClose={onClose}>
@@ -898,7 +900,8 @@ function TableActionModal({
 
         <div>
           <div className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] mb-2">Status</div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
+            <button onClick={onMakeAvailable} className="h-10 rounded-md border border-[#16A34A] text-[#15803D] hover:bg-[#DCFCE7] text-[12px] font-semibold inline-flex items-center justify-center gap-1"><Check className="size-3.5" /> Make Available</button>
             <button onClick={() => onStatus("cleaning")} className="h-10 rounded-md border border-[#F59E0B] text-[#B45309] hover:bg-[#FEF3C7] text-[12px] font-semibold">Mark Cleaning</button>
             <button onClick={() => onStatus("out_of_service")} className="h-10 rounded-md border border-[#9CA3AF] text-[#4B5563] hover:bg-[#F3F4F6] text-[12px] font-semibold inline-flex items-center justify-center gap-1"><Ban className="size-3.5" /> Out of Service</button>
           </div>
