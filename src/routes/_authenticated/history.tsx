@@ -315,7 +315,7 @@ function OrderCard({ o, idx, tablesMap, expanded, onToggle, onAction }: { o: Ord
 
       <div className="grid grid-cols-3 gap-3 mt-3 text-[12px]">
         <div><div className="text-[#9CA3AF]">👤 Customer</div><div className="font-semibold text-[#111827] truncate">Walk-in Customer</div></div>
-        <div><div className="text-[#9CA3AF]">🪑 Table</div><div className="font-semibold text-[#111827] truncate">{o.table_id ? "—" : "—"}</div></div>
+        <div><div className="text-[#9CA3AF]">🪑 Table</div><div className="font-semibold text-[#111827] truncate">{tableLabel}</div></div>
         <div><div className="text-[#9CA3AF]">🍽 Type</div><div className="font-semibold text-[#111827] capitalize">{o.order_type.replace("_", " ")}</div></div>
       </div>
 
