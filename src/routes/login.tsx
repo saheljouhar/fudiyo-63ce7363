@@ -23,25 +23,41 @@ function LoginPage() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      toast.error(error.message);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      let role: AppRole | null = null;
+      try {
+        const { data: roleRow, error: roleErr } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
+        if (roleErr) console.error("role lookup failed", roleErr);
+        role = (roleRow?.role as AppRole) ?? null;
+      } catch (err) {
+        console.error("role lookup failed", err);
+      }
+
+      toast.success("Welcome back");
+      // Preserve OAuth consent (or any) redirect target if it's same-origin relative.
+      if (next && next.startsWith("/") && !next.startsWith("//")) {
+        window.location.href = next;
+        return;
+      }
+      navigate({ to: landingForRole(role) });
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Sign in failed. Please try again.");
+    } finally {
       setLoading(false);
-      return;
     }
-    const { data: roleRow } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", data.user.id)
-      .maybeSingle();
-    toast.success("Welcome back");
-    // Preserve OAuth consent (or any) redirect target if it's same-origin relative.
-    if (next && next.startsWith("/") && !next.startsWith("//")) {
-      window.location.href = next;
-      return;
-    }
-    navigate({ to: landingForRole((roleRow?.role as AppRole) ?? null) });
   };
 
   return (

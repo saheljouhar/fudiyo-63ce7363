@@ -283,7 +283,9 @@ function StatCard({ tint, iconBg, label, value, sub, icon }: { tint: string; ico
   );
 }
 
-function OrderCard({ o, idx, expanded, onToggle, onAction }: { o: OrderRow; idx: number; expanded: boolean; onToggle: () => void; onAction: (k: ActionKind, o: OrderRow) => void }) {
+function OrderCard({ o, idx, tablesMap, expanded, onToggle, onAction }: { o: OrderRow; idx: number; tablesMap: Record<string, { number: string; floor: string | null }>; expanded: boolean; onToggle: () => void; onAction: (k: ActionKind, o: OrderRow) => void }) {
+  const tbl = o.table_id ? tablesMap[o.table_id] : undefined;
+  const tableLabel = tbl ? `Table ${tbl.number}${tbl.floor ? ` · ${tbl.floor}` : ""}` : "—";
   const codeMatch = (o.note ?? "").match(/Code:([A-Z0-9]+)/);
   const code = codeMatch ? codeMatch[1] : o.id.slice(0, 4).toUpperCase();
   const time = new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
@@ -313,7 +315,7 @@ function OrderCard({ o, idx, expanded, onToggle, onAction }: { o: OrderRow; idx:
 
       <div className="grid grid-cols-3 gap-3 mt-3 text-[12px]">
         <div><div className="text-[#9CA3AF]">👤 Customer</div><div className="font-semibold text-[#111827] truncate">Walk-in Customer</div></div>
-        <div><div className="text-[#9CA3AF]">🪑 Table</div><div className="font-semibold text-[#111827] truncate">{o.table_id ? "—" : "—"}</div></div>
+        <div><div className="text-[#9CA3AF]">🪑 Table</div><div className="font-semibold text-[#111827] truncate">{tableLabel}</div></div>
         <div><div className="text-[#9CA3AF]">🍽 Type</div><div className="font-semibold text-[#111827] capitalize">{o.order_type.replace("_", " ")}</div></div>
       </div>
 
@@ -1229,5 +1231,70 @@ function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => vo
         </aside>
       </div>
     </ModalShell>
+  );
+}
+function CompleteBillingModal({ order, tablesMap, onClose }: { order: OrderRow; tablesMap: Record<string, { number: string; floor: string | null }>; onClose: () => void }) {
+  const [method, setMethod] = useState<"cash" | "upi" | "card">("cash");
+  const [saving, setSaving] = useState(false);
+  const tbl = order.table_id ? tablesMap[order.table_id] : undefined;
+
+  const complete = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: "billed", payment_method: method })
+        .eq("id", order.id);
+      if (error) throw error;
+      if (order.table_id) {
+        await supabase.from("tables").update({ status: "cleaning", occupied_since: null }).eq("id", order.table_id);
+      }
+      toast.success("Billing completed");
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not complete billing");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-[16px] font-bold text-[#111827]">Complete Billing</div>
+            <div className="text-[12px] text-[#6B7280]">{tbl ? `Table ${tbl.number}${tbl.floor ? ` · ${tbl.floor}` : ""}` : order.order_type.replace("_", " ")}</div>
+          </div>
+          <button onClick={onClose} className="size-8 rounded-md hover:bg-[#F1F5F9] inline-flex items-center justify-center text-[#6B7280]"><X className="size-4" /></button>
+        </div>
+
+        <ul className="space-y-1 text-[13px] max-h-56 overflow-y-auto border-y border-[#F1F5F9] py-2">
+          {order.items.map((it, k) => (
+            <li key={k} className="flex justify-between text-[#374151]"><span>{it.qty}× {itemLabel(it)}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>
+          ))}
+        </ul>
+
+        <div className="mt-3 space-y-1 text-[13px]">
+          <div className="flex justify-between text-[#6B7280]"><span>Subtotal</span><span>{formatINR(Number(order.subtotal))}</span></div>
+          <div className="flex justify-between text-[#6B7280]"><span>Tax</span><span>{formatINR(Number(order.tax))}</span></div>
+          <div className="flex justify-between font-bold text-[#111827] text-[16px]"><span>Total</span><span>{formatINR(Number(order.total))}</span></div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {(["cash", "upi", "card"] as const).map((m) => (
+            <button key={m} onClick={() => setMethod(m)}
+              className={`h-11 rounded-lg text-[13px] font-semibold capitalize border ${method === m ? "bg-[#0D9488] text-white border-[#0D9488]" : "bg-white text-[#374151] border-[#E5E7EB]"}`}>
+              {m}
+            </button>
+          ))}
+        </div>
+
+        <button onClick={complete} disabled={saving}
+          className="mt-4 h-12 w-full rounded-lg bg-[#0D9488] text-white font-semibold text-[14px] disabled:opacity-60">
+          {saving ? "Completing…" : `Complete Billing · ${formatINR(Number(order.total))}`}
+        </button>
+      </div>
+    </div>
   );
 }

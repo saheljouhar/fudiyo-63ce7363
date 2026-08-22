@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
-export type AppRole = "waiter" | "kitchen" | "accountant" | "manager";
+export type AppRole = "waiter" | "kitchen" | "accountant" | "manager" | "owner" | "super_admin";
 
 export interface AuthState {
   user: User | null;
@@ -53,12 +53,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => useContext(Ctx);
 
-export function landingForRole(role: AppRole | null): string {
+export function landingForRole(role: AppRole | string | null): string {
   switch (role) {
     case "waiter": return "/tables";
     case "kitchen": return "/kitchen";
     case "accountant": return "/history";
-    case "manager": return "/dashboard";
-    default: return "/login";
+    case "manager":
+    case "owner":
+    case "super_admin": return "/dashboard";
+    // Authenticated but role missing/unknown: still land somewhere usable.
+    default: return "/dashboard";
   }
 }
