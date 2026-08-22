@@ -283,7 +283,9 @@ function StatCard({ tint, iconBg, label, value, sub, icon }: { tint: string; ico
   );
 }
 
-function OrderCard({ o, idx, expanded, onToggle, onAction }: { o: OrderRow; idx: number; expanded: boolean; onToggle: () => void; onAction: (k: ActionKind, o: OrderRow) => void }) {
+function OrderCard({ o, idx, tablesMap, expanded, onToggle, onAction }: { o: OrderRow; idx: number; tablesMap: Record<string, { number: string; floor: string | null }>; expanded: boolean; onToggle: () => void; onAction: (k: ActionKind, o: OrderRow) => void }) {
+  const tbl = o.table_id ? tablesMap[o.table_id] : undefined;
+  const tableLabel = tbl ? `Table ${tbl.number}${tbl.floor ? ` · ${tbl.floor}` : ""}` : "—";
   const codeMatch = (o.note ?? "").match(/Code:([A-Z0-9]+)/);
   const code = codeMatch ? codeMatch[1] : o.id.slice(0, 4).toUpperCase();
   const time = new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
