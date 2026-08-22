@@ -140,10 +140,30 @@ function OrdersTab({ orders, view, me, tablesMap }: { orders: OrderRow[]; view: 
   const [dateOpen, setDateOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState<string>("");
   const [customTo, setCustomTo] = useState<string>("");
+  const navigate = useNavigate();
   const onAction = (kind: ActionKind, order: OrderRow) => {
     if (kind === "print-bill" || kind === "print-kot") { handleQuickPrint(kind, order); return; }
+    if (kind === "update") { void navigate({ to: "/orders", search: { order: order.id } as never }); return; }
+    if (kind === "start" || kind === "served" || kind === "cancel") {
+      const next: Status = kind === "start" ? "cooking" : kind === "served" ? "cleared" : "voided";
+      void (async () => {
+        const { error } = await supabase.from("orders").update({ status: next }).eq("id", order.id);
+        if (error) { toast.error(error.message); return; }
+        if (kind === "start") {
+          // mirror the Kitchen Display cook timer so both screens agree
+          try {
+            const raw = JSON.parse(localStorage.getItem("fudiyo.kds.cookTimers") ?? "{}");
+            raw[order.id] = { start: Date.now() };
+            localStorage.setItem("fudiyo.kds.cookTimers", JSON.stringify(raw));
+          } catch { /* ignore */ }
+        }
+        toast.success(kind === "start" ? "Started cooking" : kind === "served" ? "Marked served" : "Order cancelled");
+      })();
+      return;
+    }
     setActive({ kind, order });
   };
+
 
   const filtered = useMemo(() => {
     const now = Date.now();
