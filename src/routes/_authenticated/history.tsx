@@ -1344,7 +1344,7 @@ function CompleteBillingModal({ order, tablesMap, onClose }: { order: OrderRow; 
 
         <button onClick={complete} disabled={saving}
           className="mt-4 h-12 w-full rounded-lg bg-[#0D9488] text-white font-semibold text-[14px] disabled:opacity-60">
-          {saving ? "Completing…" : `Complete Billing · ${formatINR(Number(order.total))}`}
+          {saving ? "Completing…" : `Complete Billing · ${formatINR(payable)}`}
         </button>
       </div>
     </div>
