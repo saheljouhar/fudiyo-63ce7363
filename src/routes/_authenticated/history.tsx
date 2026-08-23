@@ -288,7 +288,9 @@ function OrdersTab({ orders, view, me, tablesMap }: { orders: OrderRow[]; view: 
   );
 }
 
-type ActionKind = "view" | "print-bill" | "print-kot" | "refund" | "edit-details" | "edit-items" | "complete";
+type ActionKind =
+  | "view" | "print-bill" | "print-kot" | "refund" | "edit-details" | "edit-items"
+  | "complete" | "start" | "served" | "cancel" | "update";
 
 function StatCard({ tint, iconBg, label, value, sub, icon }: { tint: string; iconBg: string; label: string; value: string; sub?: string; icon: string }) {
   return (
@@ -311,6 +313,7 @@ function OrderCard({ o, idx, tablesMap, expanded, onToggle, onAction }: { o: Ord
   const time = new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
   const itemsVisible = expanded ? o.items : o.items.slice(0, 2);
   const more = o.items.length - itemsVisible.length;
+  const live = ["pending", "cooking", "ready"].includes(o.status);
 
   const copy = (text: string) => { navigator.clipboard.writeText(text); toast.success("Copied"); };
 
@@ -346,12 +349,16 @@ function OrderCard({ o, idx, tablesMap, expanded, onToggle, onAction }: { o: Ord
             {expanded ? <>Hide <ChevronUp className="size-3" /></> : <>View <ChevronDown className="size-3" /></>}
           </button>
         </div>
-        <ul className="space-y-0.5 text-[13px]">
+        <ul className={`space-y-0.5 text-[13px] ${expanded ? "max-h-56 overflow-y-auto pr-1" : ""}`}>
           {itemsVisible.map((it, k) => (
             <li key={k} className="flex justify-between text-[#374151]"><span>{it.qty}× {itemLabel(it)}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>
           ))}
-          {!expanded && more > 0 && <li className="text-[12px] text-[#0D9488]">+{more} more...</li>}
         </ul>
+        {(more > 0 || expanded) && (
+          <button onClick={onToggle} className="mt-1 text-[12px] font-semibold text-[#0D9488] hover:underline">
+            {expanded ? "Show less" : `+${more} more...`}
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-[#F1F5F9]">
@@ -360,11 +367,19 @@ function OrderCard({ o, idx, tablesMap, expanded, onToggle, onAction }: { o: Ord
           <div className="inline-flex items-center gap-1 ml-3">Order ID {o.id.slice(0, 8)}… <button onClick={() => copy(o.id)} className="text-[#9CA3AF] hover:text-[#374151]"><Copy className="size-3" /></button></div>
         </div>
         <div className="flex flex-wrap gap-1.5">
+          {!live ? null : o.status === "pending" ? (
+            <ActionBtn icon={Play} label="Start" tone="#2563EB" onClick={() => onAction("start", o)} />
+          ) : o.status === "cooking" || o.status === "ready" ? (
+            <ActionBtn icon={Check} label="Served" tone="#16A34A" onClick={() => onAction("served", o)} />
+          ) : null}
+          {live && <ActionBtn icon={Ban} label="Cancel" tone="#DC2626" onClick={() => onAction("cancel", o)} />}
           <ActionBtn icon={Eye} label="View" onClick={() => onAction("view", o)} />
           <PrintDropdown onPick={(k) => onAction(k, o)} />
-          <ActionBtn icon={RotateCcw} label="Refund" onClick={() => onAction("refund", o)} />
-          <ActionBtn icon={Pencil} label="Edit Details" onClick={() => onAction("edit-details", o)} />
-          <button onClick={() => onAction("edit-items", o)} className="h-8 px-3 rounded-lg bg-[#0D9488] text-white text-[12px] font-semibold inline-flex items-center gap-1"><Pencil className="size-3" /> Edit Items</button>
+          {!live && <ActionBtn icon={RotateCcw} label="Refund" onClick={() => onAction("refund", o)} />}
+          <ActionBtn icon={Pencil} label="Update Order" onClick={() => onAction("update", o)} />
+          {live && (
+            <button onClick={() => onAction("complete", o)} className="h-8 px-3 rounded-lg bg-[#0D9488] text-white text-[12px] font-semibold inline-flex items-center gap-1"><Receipt className="size-3" /> Complete Billing</button>
+          )}
         </div>
       </div>
     </div>
@@ -1256,14 +1271,19 @@ function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => vo
 function CompleteBillingModal({ order, tablesMap, onClose }: { order: OrderRow; tablesMap: Record<string, { number: string; floor: string | null }>; onClose: () => void }) {
   const [method, setMethod] = useState<"cash" | "upi" | "card">("cash");
   const [saving, setSaving] = useState(false);
+  const [custName, setCustName] = useState("");
+  const [custPhone, setCustPhone] = useState("");
+  const [discount, setDiscount] = useState(0);
   const tbl = order.table_id ? tablesMap[order.table_id] : undefined;
+  const payable = Math.max(0, Number(order.total) - (Number(discount) || 0));
 
   const complete = async () => {
     setSaving(true);
     try {
+      const extra = [custName && `Cust:${custName}`, custPhone && `Ph:${custPhone}`, discount ? `Disc:${discount}` : ""].filter(Boolean).join(" ");
       const { error } = await supabase
         .from("orders")
-        .update({ status: "billed", payment_method: method })
+        .update({ status: "billed", payment_method: method, total: payable, note: [order.note ?? "", extra].filter(Boolean).join(" ") })
         .eq("id", order.id);
       if (error) throw error;
       if (order.table_id) {
@@ -1295,10 +1315,22 @@ function CompleteBillingModal({ order, tablesMap, onClose }: { order: OrderRow; 
           ))}
         </ul>
 
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <input value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="Customer name"
+            className="h-11 rounded-lg border border-[#E5E7EB] px-3 text-[13px]" />
+          <input value={custPhone} onChange={(e) => setCustPhone(e.target.value)} placeholder="Phone" inputMode="tel"
+            className="h-11 rounded-lg border border-[#E5E7EB] px-3 text-[13px]" />
+        </div>
+
         <div className="mt-3 space-y-1 text-[13px]">
           <div className="flex justify-between text-[#6B7280]"><span>Subtotal</span><span>{formatINR(Number(order.subtotal))}</span></div>
-          <div className="flex justify-between text-[#6B7280]"><span>Tax</span><span>{formatINR(Number(order.tax))}</span></div>
-          <div className="flex justify-between font-bold text-[#111827] text-[16px]"><span>Total</span><span>{formatINR(Number(order.total))}</span></div>
+          <div className="flex justify-between text-[#6B7280]"><span>Tax (GST)</span><span>{formatINR(Number(order.tax))}</span></div>
+          <div className="flex justify-between items-center text-[#6B7280]">
+            <span>Discount</span>
+            <input type="number" min={0} value={discount || ""} onChange={(e) => setDiscount(Number(e.target.value) || 0)} placeholder="0"
+              className="h-9 w-28 rounded-lg border border-[#E5E7EB] px-2 text-right text-[13px]" />
+          </div>
+          <div className="flex justify-between font-bold text-[#111827] text-[16px] pt-1 border-t border-[#F1F5F9]"><span>Total</span><span>{formatINR(payable)}</span></div>
         </div>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
@@ -1312,7 +1344,7 @@ function CompleteBillingModal({ order, tablesMap, onClose }: { order: OrderRow; 
 
         <button onClick={complete} disabled={saving}
           className="mt-4 h-12 w-full rounded-lg bg-[#0D9488] text-white font-semibold text-[14px] disabled:opacity-60">
-          {saving ? "Completing…" : `Complete Billing · ${formatINR(Number(order.total))}`}
+          {saving ? "Completing…" : `Complete Billing · ${formatINR(payable)}`}
         </button>
       </div>
     </div>
