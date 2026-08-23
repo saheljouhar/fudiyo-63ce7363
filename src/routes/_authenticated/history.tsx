@@ -1315,10 +1315,22 @@ function CompleteBillingModal({ order, tablesMap, onClose }: { order: OrderRow; 
           ))}
         </ul>
 
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <input value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="Customer name"
+            className="h-11 rounded-lg border border-[#E5E7EB] px-3 text-[13px]" />
+          <input value={custPhone} onChange={(e) => setCustPhone(e.target.value)} placeholder="Phone" inputMode="tel"
+            className="h-11 rounded-lg border border-[#E5E7EB] px-3 text-[13px]" />
+        </div>
+
         <div className="mt-3 space-y-1 text-[13px]">
           <div className="flex justify-between text-[#6B7280]"><span>Subtotal</span><span>{formatINR(Number(order.subtotal))}</span></div>
-          <div className="flex justify-between text-[#6B7280]"><span>Tax</span><span>{formatINR(Number(order.tax))}</span></div>
-          <div className="flex justify-between font-bold text-[#111827] text-[16px]"><span>Total</span><span>{formatINR(Number(order.total))}</span></div>
+          <div className="flex justify-between text-[#6B7280]"><span>Tax (GST)</span><span>{formatINR(Number(order.tax))}</span></div>
+          <div className="flex justify-between items-center text-[#6B7280]">
+            <span>Discount</span>
+            <input type="number" min={0} value={discount || ""} onChange={(e) => setDiscount(Number(e.target.value) || 0)} placeholder="0"
+              className="h-9 w-28 rounded-lg border border-[#E5E7EB] px-2 text-right text-[13px]" />
+          </div>
+          <div className="flex justify-between font-bold text-[#111827] text-[16px] pt-1 border-t border-[#F1F5F9]"><span>Total</span><span>{formatINR(payable)}</span></div>
         </div>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
