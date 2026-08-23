@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { Printer, Plus, QrCode, RotateCcw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check, ChevronLeft, ChevronRight, Calendar, Pencil, ArrowUp, ArrowDown, Timer, Merge, Users, LayoutGrid, LayoutTemplate, Settings as SettingsIcon, Sparkles, Ban, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Printer, Plus, QrCode, RotateCcw, RotateCw, CalendarPlus, Armchair, Bell, Truck, ShoppingBag, X, Download, Copy, Check, ChevronLeft, ChevronRight, Calendar, Pencil, ArrowUp, ArrowDown, Timer, Merge, Users, LayoutGrid, LayoutTemplate, Settings as SettingsIcon, Sparkles, Ban, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
