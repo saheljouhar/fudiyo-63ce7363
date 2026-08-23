@@ -55,56 +55,76 @@ function TablesPage() {
     return () => clearInterval(i);
   }, []);
 
+  const load = useCallback(async () => {
+    const { data } = await supabase.from("tables").select("*").order("number");
+    if (data) {
+      const sorted = [...(data as TableRow[])].sort((a, b) => {
+        const an = parseInt(a.number, 10);
+        const bn = parseInt(b.number, 10);
+        if (!isNaN(an) && !isNaN(bn)) return an - bn;
+        return a.number.localeCompare(b.number);
+      });
+      setTables(sorted);
+    }
+    const { data: o } = await supabase
+      .from("orders")
+      .select("table_id,total,status,items")
+      .in("status", ["pending", "cooking", "ready"]);
+    if (o) {
+      const map: Record<string, number> = {};
+      const active = new Set<string>();
+      for (const row of o as OrderTotal[]) {
+        if (!row.table_id) continue;
+        map[row.table_id] = (map[row.table_id] ?? 0) + Number(row.total ?? 0);
+        if (Array.isArray(row.items) && row.items.length > 0) active.add(row.table_id);
+      }
+      setTotals(map);
+      setActiveTables(active);
+    } else {
+      setTotals({});
+      setActiveTables(new Set());
+    }
+  }, []);
+
   useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase.from("tables").select("*").order("number");
-      if (data) {
-        const sorted = [...(data as TableRow[])].sort((a, b) => {
-          const an = parseInt(a.number, 10);
-          const bn = parseInt(b.number, 10);
-          if (!isNaN(an) && !isNaN(bn)) return an - bn;
-          return a.number.localeCompare(b.number);
-        });
-        setTables(sorted);
-      }
-      const { data: o } = await supabase
-        .from("orders")
-        .select("table_id,total,status")
-        .in("status", ["pending", "cooking", "ready"]);
-      if (o) {
-        const map: Record<string, number> = {};
-        for (const row of o as OrderTotal[]) {
-          if (!row.table_id) continue;
-          map[row.table_id] = (map[row.table_id] ?? 0) + Number(row.total ?? 0);
-        }
-        setTotals(map);
-      }
-    };
-    load();
+    void load();
     const ch = supabase
       .channel("tables-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tables" }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "tables" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void load())
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
-  }, []);
+  }, [load]);
+
+  const doRefresh = async () => { await load(); toast.success("Tables refreshed"); };
 
   const floors = useMemo(() => {
     const set = new Set(tables.map((t) => t.floor));
     return Array.from(set);
   }, [tables]);
 
-  const visible = activeFloor === "all" ? tables : tables.filter((t) => t.floor === activeFloor);
+  /** A table is only Occupied when a real order with items exists for it. */
+  const derived = useMemo(
+    () =>
+      tables.map((t) =>
+        (t.status === "occupied" || t.status === "bill_requested") && !activeTables.has(t.id)
+          ? { ...t, status: "available" as TableStatus, occupied_since: null }
+          : t,
+      ),
+    [tables, activeTables],
+  );
+
+  const visible = activeFloor === "all" ? derived : derived.filter((t) => t.floor === activeFloor);
 
   const counts = useMemo(() => {
     let avail = 0, occ = 0, bill = 0;
-    for (const t of tables) {
+    for (const t of derived) {
       if (t.status === "available") avail++;
       else if (t.status === "occupied") occ++;
       else if (t.status === "bill_requested") bill++;
     }
-    return { total: tables.length, avail, occ, bill };
-  }, [tables]);
+    return { total: derived.length, avail, occ, bill };
+  }, [derived]);
 
   const takeOrder = async (t: TableRow) => {
     if (t.status === "available") {
