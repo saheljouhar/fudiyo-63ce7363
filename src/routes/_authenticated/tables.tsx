@@ -19,7 +19,7 @@ interface TableRow {
   occupied_since: string | null;
   layout?: unknown;
 }
-interface OrderTotal { table_id: string | null; total: number }
+interface OrderTotal { table_id: string | null; total: number; items?: unknown }
 
 export const Route = createFileRoute("/_authenticated/tables")({
   component: TablesPage,
