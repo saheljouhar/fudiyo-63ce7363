@@ -288,7 +288,9 @@ function OrdersTab({ orders, view, me, tablesMap }: { orders: OrderRow[]; view: 
   );
 }
 
-type ActionKind = "view" | "print-bill" | "print-kot" | "refund" | "edit-details" | "edit-items" | "complete";
+type ActionKind =
+  | "view" | "print-bill" | "print-kot" | "refund" | "edit-details" | "edit-items"
+  | "complete" | "start" | "served" | "cancel" | "update";
 
 function StatCard({ tint, iconBg, label, value, sub, icon }: { tint: string; iconBg: string; label: string; value: string; sub?: string; icon: string }) {
   return (
