@@ -1271,14 +1271,19 @@ function EditItemsModal({ order, onClose }: { order: OrderRow; onClose: () => vo
 function CompleteBillingModal({ order, tablesMap, onClose }: { order: OrderRow; tablesMap: Record<string, { number: string; floor: string | null }>; onClose: () => void }) {
   const [method, setMethod] = useState<"cash" | "upi" | "card">("cash");
   const [saving, setSaving] = useState(false);
+  const [custName, setCustName] = useState("");
+  const [custPhone, setCustPhone] = useState("");
+  const [discount, setDiscount] = useState(0);
   const tbl = order.table_id ? tablesMap[order.table_id] : undefined;
+  const payable = Math.max(0, Number(order.total) - (Number(discount) || 0));
 
   const complete = async () => {
     setSaving(true);
     try {
+      const extra = [custName && `Cust:${custName}`, custPhone && `Ph:${custPhone}`, discount ? `Disc:${discount}` : ""].filter(Boolean).join(" ");
       const { error } = await supabase
         .from("orders")
-        .update({ status: "billed", payment_method: method })
+        .update({ status: "billed", payment_method: method, total: payable, note: [order.note ?? "", extra].filter(Boolean).join(" ") })
         .eq("id", order.id);
       if (error) throw error;
       if (order.table_id) {
