@@ -348,12 +348,16 @@ function OrderCard({ o, idx, tablesMap, expanded, onToggle, onAction }: { o: Ord
             {expanded ? <>Hide <ChevronUp className="size-3" /></> : <>View <ChevronDown className="size-3" /></>}
           </button>
         </div>
-        <ul className="space-y-0.5 text-[13px]">
+        <ul className={`space-y-0.5 text-[13px] ${expanded ? "max-h-56 overflow-y-auto pr-1" : ""}`}>
           {itemsVisible.map((it, k) => (
             <li key={k} className="flex justify-between text-[#374151]"><span>{it.qty}× {itemLabel(it)}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>
           ))}
-          {!expanded && more > 0 && <li className="text-[12px] text-[#0D9488]">+{more} more...</li>}
         </ul>
+        {(more > 0 || expanded) && (
+          <button onClick={onToggle} className="mt-1 text-[12px] font-semibold text-[#0D9488] hover:underline">
+            {expanded ? "Show less" : `+${more} more...`}
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-[#F1F5F9]">
@@ -362,11 +366,19 @@ function OrderCard({ o, idx, tablesMap, expanded, onToggle, onAction }: { o: Ord
           <div className="inline-flex items-center gap-1 ml-3">Order ID {o.id.slice(0, 8)}… <button onClick={() => copy(o.id)} className="text-[#9CA3AF] hover:text-[#374151]"><Copy className="size-3" /></button></div>
         </div>
         <div className="flex flex-wrap gap-1.5">
+          {!live ? null : o.status === "pending" ? (
+            <ActionBtn icon={Play} label="Start" tone="#2563EB" onClick={() => onAction("start", o)} />
+          ) : o.status === "cooking" || o.status === "ready" ? (
+            <ActionBtn icon={Check} label="Served" tone="#16A34A" onClick={() => onAction("served", o)} />
+          ) : null}
+          {live && <ActionBtn icon={Ban} label="Cancel" tone="#DC2626" onClick={() => onAction("cancel", o)} />}
           <ActionBtn icon={Eye} label="View" onClick={() => onAction("view", o)} />
           <PrintDropdown onPick={(k) => onAction(k, o)} />
-          <ActionBtn icon={RotateCcw} label="Refund" onClick={() => onAction("refund", o)} />
-          <ActionBtn icon={Pencil} label="Edit Details" onClick={() => onAction("edit-details", o)} />
-          <button onClick={() => onAction("edit-items", o)} className="h-8 px-3 rounded-lg bg-[#0D9488] text-white text-[12px] font-semibold inline-flex items-center gap-1"><Pencil className="size-3" /> Edit Items</button>
+          {!live && <ActionBtn icon={RotateCcw} label="Refund" onClick={() => onAction("refund", o)} />}
+          <ActionBtn icon={Pencil} label="Update Order" onClick={() => onAction("update", o)} />
+          {live && (
+            <button onClick={() => onAction("complete", o)} className="h-8 px-3 rounded-lg bg-[#0D9488] text-white text-[12px] font-semibold inline-flex items-center gap-1"><Receipt className="size-3" /> Complete Billing</button>
+          )}
         </div>
       </div>
     </div>
