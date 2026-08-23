@@ -313,6 +313,7 @@ function OrderCard({ o, idx, tablesMap, expanded, onToggle, onAction }: { o: Ord
   const time = new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
   const itemsVisible = expanded ? o.items : o.items.slice(0, 2);
   const more = o.items.length - itemsVisible.length;
+  const live = ["pending", "cooking", "ready"].includes(o.status);
 
   const copy = (text: string) => { navigator.clipboard.writeText(text); toast.success("Copied"); };
 
