@@ -321,7 +321,7 @@ function OrdersPage() {
 
   const occupiedTables = useMemo(() => {
     const withOrders = new Set(activeOrders.map((o) => o.table_id).filter(Boolean) as string[]);
-    return tablesData.filter((t) => t.status === "occupied" || withOrders.has(t.id));
+    return tablesData.filter((t) => withOrders.has(t.id));
   }, [tablesData, activeOrders]);
 
   const doResetAllTables = async () => {
@@ -1130,7 +1130,7 @@ function TablesPreview({
             number: t.number,
             floor: t.floor ?? "Ground Floor",
             seats: t.seats,
-            status: (byTable[t.id]?.length ?? 0) > 0 ? "occupied" : t.status,
+            status: (byTable[t.id]?.length ?? 0) > 0 ? "occupied" : (t.status === "occupied" || t.status === "bill_requested" ? "available" : t.status),
             layout: t.layout,
           }))}
           totals={Object.fromEntries(
@@ -1139,7 +1139,7 @@ function TablesPreview({
           onTableClick={(lt) => {
             const t = sortedTables.find((x) => x.id === lt.id);
             if (!t) return;
-            const occupied = t.status === "occupied" || (byTable[t.id]?.length ?? 0) > 0;
+            const occupied = (byTable[t.id]?.length ?? 0) > 0;
             occupied ? onView(t) : onPick(t);
           }}
         />
@@ -1147,7 +1147,7 @@ function TablesPreview({
         <div className="grid gap-3 items-start" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(184px, 1fr))" }}>
           {sortedTables.map((t) => {
             const list = byTable[t.id] ?? [];
-            const occupied = t.status === "occupied" || list.length > 0;
+            const occupied = list.length > 0;
             const tot = list.reduce((s, o) => s + Number(o.total ?? 0), 0);
             const since = list.length ? list[list.length - 1].created_at : null;
             const dot = occupied ? "bg-[#F59E0B]" : t.status === "available" ? "bg-[#16A34A]" : "bg-[#9CA3AF]";
