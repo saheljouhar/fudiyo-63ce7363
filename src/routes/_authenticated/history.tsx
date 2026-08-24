@@ -68,15 +68,20 @@ function HistoryPage() {
     const a = document.createElement("a"); a.href = url; a.download = `orders-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
   };
 
-  useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(500);
-      if (data) setOrders(data as unknown as OrderRow[]);
-    };
-    void load();
-    const ch = supabase.channel("orders-history").on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => load()).subscribe();
-    return () => { void supabase.removeChannel(ch); };
+  const load = useCallback(async () => {
+    const { data } = await supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(500);
+    if (data) setOrders(data as unknown as OrderRow[]);
   }, []);
+
+  useEffect(() => {
+    void load();
+    const ch = supabase.channel("orders-history").on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void load()).subscribe();
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => { void supabase.removeChannel(ch); window.removeEventListener("focus", onFocus); };
+  }, [load]);
+
+  const doRefresh = async () => { await load(); toast.success("Orders refreshed"); };
 
   return (
     <main className="p-6 max-w-[1500px] mx-auto">
@@ -92,6 +97,9 @@ function HistoryPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[13px] text-[#6B7280]">{orders.length} orders</span>
+          <button onClick={() => void doRefresh()} className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-[13px] font-semibold text-[#374151] inline-flex items-center gap-1.5 hover:bg-[#F9FAFB]">
+            <RotateCw className="size-4" /> Refresh
+          </button>
           <button onClick={exportAll} className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-[13px] font-semibold text-[#374151] inline-flex items-center gap-1.5 hover:bg-[#F9FAFB]">
             <Download className="size-4" /> Export
           </button>
@@ -435,7 +443,7 @@ function GridView({ orders, open, setOpen, onAction }: { orders: OrderRow[]; ope
                 </tr>
                 {expanded && (
                   <tr className="bg-[#F9FAFB]"><td colSpan={9} className="p-4">
-                    <ul className="space-y-0.5 text-[13px]">
+                    <ul className="space-y-0.5 text-[13px] bg-[#F3F4F6] border border-[#E5E7EB] rounded-lg p-3 max-h-56 overflow-y-auto">
                       {o.items.map((it, k) => <li key={k} className="flex justify-between"><span>{it.qty}× {itemLabel(it)}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>)}
                     </ul>
                   </td></tr>
