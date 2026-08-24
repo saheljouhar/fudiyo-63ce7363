@@ -1306,7 +1306,7 @@ function CompleteBillingModal({ order, tablesMap, onClose }: { order: OrderRow; 
         await supabase.from("saved_carts").delete().eq("table_id", order.table_id);
       }
       toast.success("Billing completed");
-      if (printAfter) printBill({ ...order, total: payable, payment_method: method });
+      if (printAfter) handleQuickPrint("print-bill", { ...order, total: payable, payment_method: method });
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not complete billing");
