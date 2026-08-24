@@ -30,6 +30,7 @@ function TablesPage() {
   const navigate = useNavigate();
   const [tables, setTables] = useState<TableRow[]>([]);
   const [totals, setTotals] = useState<Record<string, number>>({});
+  const [activeTables, setActiveTables] = useState<Set<string>>(() => new Set());
   const [activeFloor, setActiveFloor] = useState<string>("all");
   const [section, setSection] = useState<"tables" | "delivery">("tables");
   const [deliveryFilter, setDeliveryFilter] = useState<"all" | "delivery" | "takeaway">("all");
@@ -137,13 +138,18 @@ function TablesPage() {
   };
 
   const doResetAll = async () => {
+    // Optimistic: clear the UI instantly, then persist.
+    setTables((prev) => prev.map((t) => ({ ...t, status: "available" as TableStatus, occupied_since: null })));
+    setActiveTables(new Set());
+    setTotals({});
+    setResetOpen(false);
     const { error } = await supabase
       .from("tables")
       .update({ status: "available", occupied_since: null })
       .neq("id", "00000000-0000-0000-0000-000000000000");
     if (error) {
       toast.error(error.message);
-      setResetOpen(false);
+      void load();
       return;
     }
     // Clear the live orders + parked carts that keep tables "occupied" on Dashboard Billing
@@ -154,8 +160,9 @@ function TablesPage() {
       .not("table_id", "is", null);
     await supabase.from("saved_carts").delete().not("table_id", "is", null);
     toast.success("All tables reset");
-    setResetOpen(false);
+    void load();
   };
+
 
   const doDeleteTable = async () => {
     const t = deleteTarget;
@@ -182,6 +189,7 @@ function TablesPage() {
         subtitle="Fudiyo Kitchen"
         actions={
           <>
+            <Button variant="outline" size="sm" onClick={() => void doRefresh()}><RotateCw /> Refresh</Button>
             <Button variant="outline" size="sm" onClick={() => setBookOpen(true)}><CalendarPlus /> Book</Button>
             <Button variant="outline" size="sm" onClick={() => setResetOpen(true)}><RotateCcw /> Reset All</Button>
             <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}><Plus /> Add</Button>
