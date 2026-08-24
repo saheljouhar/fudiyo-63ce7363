@@ -1084,9 +1084,15 @@ function TablesPreview({
 }) {
   const byTable = useMemo(() => {
     const m: Record<string, ActiveOrder[]> = {};
-    for (const o of orders) if (o.table_id) (m[o.table_id] ||= []).push(o);
+    // Only orders that actually contain items mark a table as occupied.
+    for (const o of orders) {
+      if (!o.table_id) continue;
+      if (!Array.isArray(o.items) || o.items.length === 0) continue;
+      (m[o.table_id] ||= []).push(o);
+    }
     return m;
   }, [orders]);
+
   const sortedTables = useMemo(() => {
     const num = (s: string) => {
       const m = String(s).match(/\d+/);
