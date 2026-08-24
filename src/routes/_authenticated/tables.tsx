@@ -30,6 +30,7 @@ function TablesPage() {
   const navigate = useNavigate();
   const [tables, setTables] = useState<TableRow[]>([]);
   const [totals, setTotals] = useState<Record<string, number>>({});
+  const [activeTables, setActiveTables] = useState<Set<string>>(() => new Set());
   const [activeFloor, setActiveFloor] = useState<string>("all");
   const [section, setSection] = useState<"tables" | "delivery">("tables");
   const [deliveryFilter, setDeliveryFilter] = useState<"all" | "delivery" | "takeaway">("all");
