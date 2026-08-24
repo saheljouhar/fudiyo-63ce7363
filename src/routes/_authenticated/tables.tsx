@@ -182,6 +182,7 @@ function TablesPage() {
         subtitle="Fudiyo Kitchen"
         actions={
           <>
+            <Button variant="outline" size="sm" onClick={() => void doRefresh()}><RotateCw /> Refresh</Button>
             <Button variant="outline" size="sm" onClick={() => setBookOpen(true)}><CalendarPlus /> Book</Button>
             <Button variant="outline" size="sm" onClick={() => setResetOpen(true)}><RotateCcw /> Reset All</Button>
             <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}><Plus /> Add</Button>
