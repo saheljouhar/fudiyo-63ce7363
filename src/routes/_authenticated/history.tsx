@@ -1,11 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR, itemLabel } from "@/lib/format";
 import {
   Receipt, ChevronDown, ChevronUp, Printer, Eye, Pencil, RotateCcw, Pause,
   Calendar, ClipboardList, LayoutGrid, List, BarChart3, Search, Copy, Check,
-  FileSpreadsheet, ArrowUpDown, Plus, X, Minus, Trash2, Download, Play, Ban, Utensils,
+  FileSpreadsheet, ArrowUpDown, Plus, X, Minus, Trash2, Download, Play, Ban, Utensils, RotateCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
