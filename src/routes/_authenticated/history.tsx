@@ -922,7 +922,6 @@ export function handleQuickPrint(kind: "print-bill" | "print-kot", o: OrderRow) 
 }
 
 function ViewModal({ order, orders, onClose }: { order: OrderRow; orders: OrderRow[]; onClose: () => void }) {
-  const code = (order.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1] ?? order.id.slice(0, 4).toUpperCase();
   const orderNumber = dailyOrderNumber(order, orders);
   const custName = (order.note ?? "").match(/Name:([^|]+)/)?.[1]?.trim() || "Walk-in Customer";
   const tableNo = (order.note ?? "").match(/Table:([^|]+)/)?.[1]?.trim() || "—";
