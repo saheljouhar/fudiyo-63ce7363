@@ -295,7 +295,7 @@ function OrdersTab({ orders, view, me, tablesMap }: { orders: OrderRow[]; view: 
         <GridView orders={filtered} open={open} setOpen={setOpen} onAction={onAction} />
       )}
 
-      {active?.kind === "view" && <ViewModal order={active.order} onClose={() => setActive(null)} />}
+      {active?.kind === "view" && <ViewModal order={active.order} orders={orders} onClose={() => setActive(null)} />}
       {active?.kind === "refund" && <RefundModal order={active.order} onClose={() => setActive(null)} />}
       {active?.kind === "edit-details" && <EditDetailsModal order={active.order} onClose={() => setActive(null)} />}
       {active?.kind === "edit-items" && <EditItemsModal order={active.order} onClose={() => setActive(null)} />}
