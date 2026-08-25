@@ -407,6 +407,45 @@ function OrdersPage() {
     ].filter(Boolean) as string[];
     const status = kind === "kot" ? "pending" : "billed";
     const activeTableId = servingTable?.id ?? tableId ?? null;
+
+    // Adding items to a table that already has a running order: update that same
+    // order in place so Orders history and the Kitchen Display keep one card.
+    if (kind === "kot" && baseOrderIds.length > 0) {
+      const primaryId = baseOrderIds[0];
+      const { data: primary } = await supabase.from("orders").select("status").eq("id", primaryId).maybeSingle();
+      const nextStatus = primary?.status === "ready" ? "pending" : (primary?.status ?? "pending");
+      const { error: upErr } = await supabase.from("orders").update({
+        items: JSON.parse(JSON.stringify(cart)),
+        subtotal, tax, total,
+        order_type: orderType,
+        status: nextStatus as "pending",
+        payment_method: pay,
+        note: noteParts.join(" | "),
+        table_id: activeTableId,
+      }).eq("id", primaryId);
+      if (upErr) { setSending(false); return toast.error(upErr.message); }
+      // Consolidate any extra rows for this table into the primary order
+      const extras = baseOrderIds.slice(1);
+      if (extras.length > 0) {
+        await supabase.from("orders").update({ items: [], status: "cleared" }).in("id", extras);
+      }
+      for (const line of delta) {
+        const d = dishes.find((x) => x.id === (line.dishId ?? line.id));
+        if (!d?.track_stock) continue;
+        const { data: inv } = await supabase.from("inventory_items").select("id, quantity").ilike("name", d.name).maybeSingle();
+        if (inv) await supabase.from("inventory_items").update({ quantity: Math.max(0, Number(inv.quantity) - line.qty) }).eq("id", inv.id);
+      }
+      if (activeTableId) await supabase.from("tables").update({ status: "occupied" }).eq("id", activeTableId);
+      setSending(false);
+      setBaseItems(cart.map((x) => ({ ...x })));
+      setBaseOrderIds([primaryId]);
+      if (activeTableId) setJustTaken((v) => (v.includes(activeTableId) ? v : [...v, activeTableId]));
+      await refreshTables();
+      setShowTables(true);
+      toast.success("Order updated & KOT sent");
+      return;
+    }
+
     const { data, error } = await supabase.from("orders").insert({
       restaurant_id: restaurantId,
       table_id: activeTableId,
