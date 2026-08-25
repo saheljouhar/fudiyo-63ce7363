@@ -932,20 +932,29 @@ function OrdersPage() {
                     })}
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={saveCart} disabled={sending}
-                    className="flex-1 h-11 rounded-lg bg-[#F59E0B] text-white font-semibold text-[12px] inline-flex items-center justify-center gap-1 disabled:opacity-50">
-                    <Save className="size-3.5" /> Save Order
-                  </button>
+                {baseOrderIds.length > 0 ? (
                   <button onClick={() => send("kot")} disabled={sending}
-                    className="flex-1 h-11 rounded-lg bg-[#111827] text-white font-semibold text-[12px] inline-flex items-center justify-center gap-1 disabled:opacity-50">
-                    <ChefHat className="size-3.5" /> Place KOT
+                    className="w-full h-12 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold text-[14px] inline-flex items-center justify-center gap-2 disabled:opacity-50">
+                    <ChefHat className="size-4" /> Update & KOT
                   </button>
-                </div>
-                <button onClick={() => send("billed")} disabled={sending}
-                  className="w-full h-12 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-[14px] inline-flex items-center justify-center gap-2 disabled:opacity-50">
-                  <Check className="size-4" /> Complete Billing
-                </button>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      <button onClick={saveCart} disabled={sending}
+                        className="flex-1 h-11 rounded-lg bg-[#F59E0B] text-white font-semibold text-[12px] inline-flex items-center justify-center gap-1 disabled:opacity-50">
+                        <Save className="size-3.5" /> Save Order
+                      </button>
+                      <button onClick={() => send("kot")} disabled={sending}
+                        className="flex-1 h-11 rounded-lg bg-[#111827] text-white font-semibold text-[12px] inline-flex items-center justify-center gap-1 disabled:opacity-50">
+                        <ChefHat className="size-3.5" /> Place KOT
+                      </button>
+                    </div>
+                    <button onClick={() => send("billed")} disabled={sending}
+                      className="w-full h-12 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-[14px] inline-flex items-center justify-center gap-2 disabled:opacity-50">
+                      <Check className="size-4" /> Complete Billing
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           )}
