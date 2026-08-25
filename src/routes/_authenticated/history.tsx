@@ -359,22 +359,24 @@ function OrderCard({ o, idx, tablesMap, expanded, onToggle, onAction }: { o: Ord
       </div>
 
       <div className="mt-3 border-t border-[#F1F5F9] pt-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[13px] font-semibold text-[#111827]">{o.items.length} Items</span>
-          <button onClick={onToggle} className="text-[12px] font-semibold text-[#0D9488] inline-flex items-center gap-1">
-            {expanded ? <>Hide <ChevronUp className="size-3" /></> : <>View <ChevronDown className="size-3" /></>}
-          </button>
+        <div className="bg-[#F3F4F6] rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[13px] font-semibold text-[#111827]">{o.items.length} Items</span>
+            <button onClick={onToggle} className="text-[12px] font-semibold text-[#0D9488] inline-flex items-center gap-1">
+              {expanded ? <>Hide <ChevronUp className="size-3" /></> : <>View <ChevronDown className="size-3" /></>}
+            </button>
+          </div>
+          <ul className={`space-y-0.5 text-[13px] ${expanded ? "max-h-56 overflow-y-auto pr-1" : ""}`}>
+            {itemsVisible.map((it, k) => (
+              <li key={k} className="flex justify-between text-[#374151]"><span>{it.qty}× {itemLabel(it)}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>
+            ))}
+          </ul>
+          {(more > 0 || expanded) && (
+            <button onClick={onToggle} className="mt-1 text-[12px] font-semibold text-[#0D9488] hover:underline">
+              {expanded ? "Show less" : `+${more} more...`}
+            </button>
+          )}
         </div>
-        <ul className={`space-y-0.5 text-[13px] ${expanded ? "max-h-56 overflow-y-auto pr-1" : ""}`}>
-          {itemsVisible.map((it, k) => (
-            <li key={k} className="flex justify-between text-[#374151]"><span>{it.qty}× {itemLabel(it)}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>
-          ))}
-        </ul>
-        {(more > 0 || expanded) && (
-          <button onClick={onToggle} className="mt-1 text-[12px] font-semibold text-[#0D9488] hover:underline">
-            {expanded ? "Show less" : `+${more} more...`}
-          </button>
-        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-[#F1F5F9]">
