@@ -36,6 +36,14 @@ interface OrderRow {
   note: string | null;
 }
 
+function dailyOrderNumber(order: OrderRow, allOrders: OrderRow[]): number {
+  const day = new Date(order.created_at).toDateString();
+  const sameDay = allOrders.filter((o) => new Date(o.created_at).toDateString() === day);
+  sameDay.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const idx = sameDay.findIndex((o) => o.id === order.id);
+  return idx >= 0 ? idx + 1 : 1;
+}
+
 function HistoryPage() {
   const [tab, setTab] = useState<Tab>("orders");
   const [view, setView] = useState<ViewMode>("list");
