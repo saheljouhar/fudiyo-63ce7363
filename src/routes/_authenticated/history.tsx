@@ -927,7 +927,7 @@ function ViewModal({ order, orders, onClose }: { order: OrderRow; orders: OrderR
   const custName = (order.note ?? "").match(/Name:([^|]+)/)?.[1]?.trim() || "Walk-in Customer";
   const tableNo = (order.note ?? "").match(/Table:([^|]+)/)?.[1]?.trim() || "—";
   return (
-    <ModalShell title={`Order #${code}`} onClose={onClose} wide>
+    <ModalShell title={`Order Number #${orderNumber}`} onClose={onClose} wide>
       <div className="p-5 space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
           <Info label="Order Number" value={`#${orderNumber}`} />
