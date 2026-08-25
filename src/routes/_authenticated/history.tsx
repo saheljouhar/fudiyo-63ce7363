@@ -36,6 +36,14 @@ interface OrderRow {
   note: string | null;
 }
 
+function dailyOrderNumber(order: OrderRow, allOrders: OrderRow[]): number {
+  const day = new Date(order.created_at).toDateString();
+  const sameDay = allOrders.filter((o) => new Date(o.created_at).toDateString() === day);
+  sameDay.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const idx = sameDay.findIndex((o) => o.id === order.id);
+  return idx >= 0 ? idx + 1 : 1;
+}
+
 function HistoryPage() {
   const [tab, setTab] = useState<Tab>("orders");
   const [view, setView] = useState<ViewMode>("list");
@@ -287,7 +295,7 @@ function OrdersTab({ orders, view, me, tablesMap }: { orders: OrderRow[]; view: 
         <GridView orders={filtered} open={open} setOpen={setOpen} onAction={onAction} />
       )}
 
-      {active?.kind === "view" && <ViewModal order={active.order} onClose={() => setActive(null)} />}
+      {active?.kind === "view" && <ViewModal order={active.order} orders={orders} onClose={() => setActive(null)} />}
       {active?.kind === "refund" && <RefundModal order={active.order} onClose={() => setActive(null)} />}
       {active?.kind === "edit-details" && <EditDetailsModal order={active.order} onClose={() => setActive(null)} />}
       {active?.kind === "edit-items" && <EditItemsModal order={active.order} onClose={() => setActive(null)} />}
@@ -351,22 +359,24 @@ function OrderCard({ o, idx, tablesMap, expanded, onToggle, onAction }: { o: Ord
       </div>
 
       <div className="mt-3 border-t border-[#F1F5F9] pt-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[13px] font-semibold text-[#111827]">{o.items.length} Items</span>
-          <button onClick={onToggle} className="text-[12px] font-semibold text-[#0D9488] inline-flex items-center gap-1">
-            {expanded ? <>Hide <ChevronUp className="size-3" /></> : <>View <ChevronDown className="size-3" /></>}
-          </button>
+        <div className="bg-[#F3F4F6] rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[13px] font-semibold text-[#111827]">{o.items.length} Items</span>
+            <button onClick={onToggle} className="text-[12px] font-semibold text-[#0D9488] inline-flex items-center gap-1">
+              {expanded ? <>Hide <ChevronUp className="size-3" /></> : <>View <ChevronDown className="size-3" /></>}
+            </button>
+          </div>
+          <ul className={`space-y-0.5 text-[13px] ${expanded ? "max-h-56 overflow-y-auto pr-1" : ""}`}>
+            {itemsVisible.map((it, k) => (
+              <li key={k} className="flex justify-between text-[#374151]"><span>{it.qty}× {itemLabel(it)}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>
+            ))}
+          </ul>
+          {(more > 0 || expanded) && (
+            <button onClick={onToggle} className="mt-1 text-[12px] font-semibold text-[#0D9488] hover:underline">
+              {expanded ? "Show less" : `+${more} more...`}
+            </button>
+          )}
         </div>
-        <ul className={`space-y-0.5 text-[13px] ${expanded ? "max-h-56 overflow-y-auto pr-1" : ""}`}>
-          {itemsVisible.map((it, k) => (
-            <li key={k} className="flex justify-between text-[#374151]"><span>{it.qty}× {itemLabel(it)}</span><span>{formatINR((it.price ?? 0) * it.qty)}</span></li>
-          ))}
-        </ul>
-        {(more > 0 || expanded) && (
-          <button onClick={onToggle} className="mt-1 text-[12px] font-semibold text-[#0D9488] hover:underline">
-            {expanded ? "Show less" : `+${more} more...`}
-          </button>
-        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-[#F1F5F9]">
@@ -909,17 +919,17 @@ export function handleQuickPrint(kind: "print-bill" | "print-kot", o: OrderRow) 
   printReceipt(kind === "print-bill" ? renderBillHTML(o) : renderKotHTML(o));
 }
 
-function ViewModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
+function ViewModal({ order, orders, onClose }: { order: OrderRow; orders: OrderRow[]; onClose: () => void }) {
   const code = (order.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1] ?? order.id.slice(0, 4).toUpperCase();
+  const orderNumber = dailyOrderNumber(order, orders);
   const custName = (order.note ?? "").match(/Name:([^|]+)/)?.[1]?.trim() || "Walk-in Customer";
   const tableNo = (order.note ?? "").match(/Table:([^|]+)/)?.[1]?.trim() || "—";
   return (
     <ModalShell title={`Order #${code}`} onClose={onClose} wide>
       <div className="p-5 space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
-          <Info label="Status" value={order.status} />
-          <Info label="Type" value={order.order_type} />
-          <Info label="Payment" value={order.payment_method ?? "—"} />
+          <Info label="Order Number" value={`#${orderNumber}`} />
+          <Info label="Order ID" value={order.id.slice(0, 8).toUpperCase()} />
           <Info label="Waiter" value={order.waiter_name ?? "—"} />
           <Info label="Customer" value={custName} />
           <Info label="Table" value={tableNo} />
