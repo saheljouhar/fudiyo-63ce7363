@@ -919,17 +919,17 @@ export function handleQuickPrint(kind: "print-bill" | "print-kot", o: OrderRow) 
   printReceipt(kind === "print-bill" ? renderBillHTML(o) : renderKotHTML(o));
 }
 
-function ViewModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
+function ViewModal({ order, orders, onClose }: { order: OrderRow; orders: OrderRow[]; onClose: () => void }) {
   const code = (order.note ?? "").match(/Code:([A-Z0-9]+)/)?.[1] ?? order.id.slice(0, 4).toUpperCase();
+  const orderNumber = dailyOrderNumber(order, orders);
   const custName = (order.note ?? "").match(/Name:([^|]+)/)?.[1]?.trim() || "Walk-in Customer";
   const tableNo = (order.note ?? "").match(/Table:([^|]+)/)?.[1]?.trim() || "—";
   return (
     <ModalShell title={`Order #${code}`} onClose={onClose} wide>
       <div className="p-5 space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
-          <Info label="Status" value={order.status} />
-          <Info label="Type" value={order.order_type} />
-          <Info label="Payment" value={order.payment_method ?? "—"} />
+          <Info label="Order Number" value={`#${orderNumber}`} />
+          <Info label="Order ID" value={order.id.slice(0, 8).toUpperCase()} />
           <Info label="Waiter" value={order.waiter_name ?? "—"} />
           <Info label="Customer" value={custName} />
           <Info label="Table" value={tableNo} />
