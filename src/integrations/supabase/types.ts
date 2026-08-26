@@ -308,11 +308,19 @@ export type Database = {
       }
       inventory_items: {
         Row: {
+          barcode: string | null
           category: string
           created_at: string
+          description: string | null
+          expiry_date: string | null
+          expiry_days: number | null
           id: string
+          location: string | null
           low_stock_threshold: number
+          max_stock: number | null
+          mfg_date: string | null
           name: string
+          purchase_unit: string | null
           quantity: number
           restaurant_id: string | null
           supplier: string | null
@@ -321,11 +329,19 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          barcode?: string | null
           category?: string
           created_at?: string
+          description?: string | null
+          expiry_date?: string | null
+          expiry_days?: number | null
           id?: string
+          location?: string | null
           low_stock_threshold?: number
+          max_stock?: number | null
+          mfg_date?: string | null
           name: string
+          purchase_unit?: string | null
           quantity?: number
           restaurant_id?: string | null
           supplier?: string | null
@@ -334,11 +350,19 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          barcode?: string | null
           category?: string
           created_at?: string
+          description?: string | null
+          expiry_date?: string | null
+          expiry_days?: number | null
           id?: string
+          location?: string | null
           low_stock_threshold?: number
+          max_stock?: number | null
+          mfg_date?: string | null
           name?: string
+          purchase_unit?: string | null
           quantity?: number
           restaurant_id?: string | null
           supplier?: string | null
