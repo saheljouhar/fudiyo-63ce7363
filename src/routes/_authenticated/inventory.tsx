@@ -466,16 +466,20 @@ function StatCard({ label, value, color, icon }: { label: string; value: string;
     </div>
   );
 }
-function Modal({ title, onClose, children, width = "max-w-lg" }: { title: string; onClose: () => void; children: React.ReactNode; width?: string }) {
+function Modal({ title, onClose, children, width = "max-w-lg", headerColor }: { title: string; onClose: () => void; children: React.ReactNode; width?: string; headerColor?: string }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className={`bg-white rounded-xl shadow-2xl w-full ${width} max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-3 border-b flex items-center justify-between"><h2 className="text-base font-bold">{title}</h2><button onClick={onClose} className="size-8 rounded hover:bg-gray-100 inline-flex items-center justify-center"><X className="size-4" /></button></div>
+        <div className={`px-5 py-3 flex items-center justify-between ${headerColor ? "text-white" : "border-b"}`} style={headerColor ? { backgroundColor: headerColor } : undefined}>
+          <h2 className="text-base font-bold">{title}</h2>
+          <button onClick={onClose} className={`size-8 rounded inline-flex items-center justify-center ${headerColor ? "hover:bg-white/10" : "hover:bg-gray-100"}`}><X className="size-4" /></button>
+        </div>
         <div>{children}</div>
       </div>
     </div>
   );
 }
+
 function Fld({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><div className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">{label}</div>{children}</div>;
 }
