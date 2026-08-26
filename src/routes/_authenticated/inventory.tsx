@@ -481,85 +481,204 @@ function Fld({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 /* ---------- Modals ---------- */
+const UNITS = ["kg", "g", "l", "ml", "pcs", "box", "bottle", "case", "packet", "dozen"];
+const CATEGORIES = ["Ingredient", "Vegetables", "Meat & Seafood", "Dairy", "Dry Goods", "Beverages", "Spices", "Packaging", "Cleaning", "Other"];
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <div className="text-[11px] font-bold uppercase tracking-wider text-[#0D9488]">{title}</div>
+      {children}
+    </div>
+  );
+}
+
 function AddItemModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [tab, setTab] = useState<"manual" | "scan" | "paste">("manual");
-  const [name, setName] = useState(""); const [category, setCategory] = useState("Ingredient");
-  const [qty, setQty] = useState(0); const [unit, setUnit] = useState("kg");
-  const [cost, setCost] = useState(0); const [threshold, setThreshold] = useState(5);
-  const [supplier, setSupplier] = useState(""); const [saving, setSaving] = useState(false);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
+  const [name, setName] = useState(""); const [category, setCategory] = useState("");
+  const [unit, setUnit] = useState(""); const [purchaseUnit, setPurchaseUnit] = useState("");
+  const [qty, setQty] = useState(0); const [cost, setCost] = useState(0);
+  const [minStock, setMinStock] = useState(5); const [maxStock, setMaxStock] = useState(0);
+  const [supplier, setSupplier] = useState(""); const [barcode, setBarcode] = useState("");
+  const [mfgDate, setMfgDate] = useState(""); const [expiryDays, setExpiryDays] = useState<number | "">("");
+  const [useExpiryDate, setUseExpiryDate] = useState(false); const [expiryDate, setExpiryDate] = useState("");
+  const [location, setLocation] = useState(""); const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase.from("inventory_items").select("supplier");
+      const list = Array.from(new Set((data ?? []).map((r) => (r as { supplier: string | null }).supplier).filter((s): s is string => !!s)));
+      setSuppliers(list);
+    })();
+  }, []);
+
   const save = async () => {
-    if (!name) return toast.error("Name required");
+    if (!name.trim()) return toast.error("Name is required");
     setSaving(true);
-    const { error } = await supabase.from("inventory_items").insert({ name, category, quantity: qty, unit, unit_cost: cost, low_stock_threshold: threshold, supplier: supplier || null } as never);
+    const { error } = await supabase.from("inventory_items").insert({
+      name: name.trim(),
+      category: category || "Other",
+      quantity: Number(qty) || 0,
+      unit: unit || "pcs",
+      purchase_unit: purchaseUnit || null,
+      unit_cost: Number(cost) || 0,
+      low_stock_threshold: Number(minStock) || 0,
+      max_stock: maxStock ? Number(maxStock) : null,
+      supplier: supplier || null,
+      barcode: barcode || null,
+      mfg_date: mfgDate || null,
+      expiry_days: !useExpiryDate && expiryDays !== "" ? Number(expiryDays) : null,
+      expiry_date: useExpiryDate && expiryDate ? expiryDate : null,
+      location: location || null,
+      description: description || null,
+    } as never);
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("Item added"); onDone(); onClose();
   };
+
+  const inputCls = "w-full h-10 px-3 rounded-md border border-[#E2E8F0] text-sm";
+
   return (
-    <Modal title="Add Inventory Item" onClose={onClose}>
+    <Modal title="Add Inventory Item" onClose={onClose} width="max-w-2xl" headerColor="#16A34A">
       <div className="flex border-b">
         {(["manual", "scan", "paste"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`flex-1 h-11 text-sm font-semibold capitalize ${tab === t ? "border-b-2 border-[#0D9488] text-[#0D9488]" : "text-gray-500"}`}>{t === "scan" ? "Scan Invoice" : t === "paste" ? "Paste Text" : "Manual"}</button>
         ))}
       </div>
-      <div className="p-5 space-y-3">
+      <div className="p-5 space-y-5">
         {tab === "manual" && (<>
-          <Fld label="Name"><input value={name} onChange={(e) => setName(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
-          <div className="grid grid-cols-2 gap-3">
-            <Fld label="Category"><input value={category} onChange={(e) => setCategory(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
-            <Fld label="Supplier"><input value={supplier} onChange={(e) => setSupplier(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Fld label="Quantity"><input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
-            <Fld label="Unit"><select value={unit} onChange={(e) => setUnit(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm">{["kg", "g", "l", "ml", "pcs", "box"].map((u) => <option key={u}>{u}</option>)}</select></Fld>
-            <Fld label="Unit Cost (₹)"><input type="number" value={cost} onChange={(e) => setCost(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
-          </div>
-          <Fld label="Low Stock Threshold"><input type="number" value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+          <Section title="Basic Info">
+            <Fld label="Name *"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Item name" className={inputCls} /></Fld>
+            <div className="grid grid-cols-2 gap-3">
+              <Fld label="Category">
+                <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls}>
+                  <option value="">Select category</option>
+                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </Fld>
+              <Fld label="Stock / Usage Unit">
+                <select value={unit} onChange={(e) => setUnit(e.target.value)} className={inputCls}>
+                  <option value="">Select unit</option>
+                  {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </Fld>
+            </div>
+            <Fld label="Purchase Unit (optional)">
+              <select value={purchaseUnit} onChange={(e) => setPurchaseUnit(e.target.value)} className={inputCls}>
+                <option value="">Same as stock unit</option>
+                {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+              <div className="text-[11px] text-[#64748B] mt-1">Buy in this unit (e.g. bottle, case), track/deduct in the stock unit.</div>
+            </Fld>
+          </Section>
+
+          <Section title="Stock & Pricing">
+            <div className="grid grid-cols-2 gap-3">
+              <Fld label="Current Stock"><input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} className={inputCls} /></Fld>
+              <Fld label="Cost Per Unit (₹)"><input type="number" value={cost} onChange={(e) => setCost(Number(e.target.value))} className={inputCls} /></Fld>
+              <Fld label="Min Stock"><input type="number" value={minStock} onChange={(e) => setMinStock(Number(e.target.value))} className={inputCls} /></Fld>
+              <Fld label="Max Stock"><input type="number" value={maxStock} onChange={(e) => setMaxStock(Number(e.target.value))} className={inputCls} /></Fld>
+            </div>
+          </Section>
+
+          <Section title="Tracking">
+            <div className="grid grid-cols-2 gap-3">
+              <Fld label="Supplier">
+                <select value={supplier} onChange={(e) => setSupplier(e.target.value)} className={inputCls}>
+                  <option value="">Select supplier</option>
+                  {suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Fld>
+              <Fld label="Barcode"><input value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Scan or enter barcode" className={inputCls} /></Fld>
+              <Fld label="MFG Date"><input type="date" value={mfgDate} onChange={(e) => setMfgDate(e.target.value)} className={inputCls} /></Fld>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">{useExpiryDate ? "Expiry Date" : "Expiry Days"}</div>
+                  <button type="button" onClick={() => setUseExpiryDate((v) => !v)} className="text-[11px] font-semibold text-[#0D9488] hover:underline">
+                    {useExpiryDate ? "Use days instead" : "Use date instead"}
+                  </button>
+                </div>
+                {useExpiryDate
+                  ? <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={inputCls} />
+                  : <input type="number" value={expiryDays} onChange={(e) => setExpiryDays(e.target.value === "" ? "" : Number(e.target.value))} placeholder="e.g. 30" className={inputCls} />}
+              </div>
+            </div>
+            <Fld label="Location"><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Walk-in cooler, Shelf A" className={inputCls} /></Fld>
+            <Fld label="Description"><textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional notes about this item" className="w-full min-h-[80px] p-3 rounded-md border border-[#E2E8F0] text-sm" /></Fld>
+          </Section>
         </>)}
         {tab === "scan" && <div className="border-2 border-dashed rounded-xl p-10 text-center"><Upload className="size-10 mx-auto text-gray-400 mb-3" /><p className="text-sm">Upload invoice PDF/JPG (coming soon)</p></div>}
         {tab === "paste" && <textarea placeholder="Paste inventory list, one per line: Name, Qty, Unit, Cost" className="w-full min-h-[180px] p-3 border rounded-md text-sm" />}
       </div>
       <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
         <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
-        <button disabled={saving} onClick={save} className="h-10 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">Save Item</button>
+        <button disabled={saving} onClick={save} className="h-10 px-5 rounded-md bg-[#16A34A] hover:bg-[#15803D] text-white text-sm font-semibold disabled:opacity-50">{saving ? "Adding…" : "Add Item"}</button>
       </div>
     </Modal>
   );
 }
 
 function QuickStockModal({ items, onClose, onDone }: { items: Item[]; onClose: () => void; onDone: () => void }) {
-  const [itemId, setItemId] = useState(items[0]?.id ?? "");
-  const [delta, setDelta] = useState(1); const [op, setOp] = useState<"add" | "deduct">("add");
+  const [search, setSearch] = useState("");
+  const [values, setValues] = useState<Record<string, number>>(() => Object.fromEntries(items.map((i) => [i.id, Number(i.quantity)])));
   const [saving, setSaving] = useState(false);
-  const save = async () => {
-    const it = items.find((i) => i.id === itemId); if (!it) return toast.error("Pick item");
+
+  const visible = items.filter((i) => i.name.toLowerCase().includes(search.trim().toLowerCase()));
+  const changed = items.filter((i) => Number(values[i.id]) !== Number(i.quantity));
+
+  const saveAll = async () => {
+    if (!changed.length) return toast.error("No changes to save");
     setSaving(true);
-    const newQty = op === "add" ? Number(it.quantity) + delta : Math.max(0, Number(it.quantity) - delta);
-    const { error } = await supabase.from("inventory_items").update({ quantity: newQty } as never).eq("id", it.id);
+    const results = await Promise.all(
+      changed.map((i) => supabase.from("inventory_items").update({ quantity: Math.max(0, Number(values[i.id]) || 0) } as never).eq("id", i.id)),
+    );
     setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success(`${it.name} updated to ${newQty} ${it.unit}`); onDone(); onClose();
+    const err = results.find((r) => r.error)?.error;
+    if (err) return toast.error(err.message);
+    toast.success(`${changed.length} item${changed.length > 1 ? "s" : ""} updated`);
+    onDone(); onClose();
   };
+
   return (
-    <Modal title="Quick Stock Adjustment" onClose={onClose}>
+    <Modal title="Quick Stock Update" onClose={onClose} width="max-w-xl" headerColor="#16A34A">
       <div className="p-5 space-y-3">
-        <Fld label="Item"><select value={itemId} onChange={(e) => setItemId(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm">{items.map((i) => <option key={i.id} value={i.id}>{i.name} ({i.quantity} {i.unit})</option>)}</select></Fld>
-        <div className="grid grid-cols-2 gap-3">
-          <Fld label="Operation"><div className="flex gap-1 p-1 bg-[#F1F5F9] rounded-lg">
-            {(["add", "deduct"] as const).map((o) => (
-              <button key={o} onClick={() => setOp(o)} className={`flex-1 h-9 rounded-md text-sm font-semibold capitalize ${op === o ? "bg-white shadow" : "text-[#64748B]"}`}>{o}</button>
-            ))}
-          </div></Fld>
-          <Fld label="Amount"><input type="number" value={delta} onChange={(e) => setDelta(Number(e.target.value))} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
+        <div className="text-[13px] text-[#64748B]">Adjust stock levels for your daily check-in. Changed items are highlighted.</div>
+        <div className="relative">
+          <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items..." className="w-full h-10 pl-9 pr-3 rounded-md border border-[#E2E8F0] text-sm" />
+        </div>
+        <div className="max-h-[45vh] overflow-y-auto space-y-2">
+          {visible.length === 0 && <div className="py-10 text-center text-sm text-[#64748B]">No items found</div>}
+          {visible.map((i) => {
+            const isChanged = Number(values[i.id]) !== Number(i.quantity);
+            return (
+              <div key={i.id} className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition ${isChanged ? "border-[#16A34A] bg-[#F0FDF4]" : "border-[#E2E8F0] bg-white"}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-[#111827] truncate">{i.name}</div>
+                  <div className="text-[11px] text-[#64748B]">{i.category} · was {i.quantity} {i.unit}</div>
+                </div>
+                <input type="number" value={values[i.id] ?? 0}
+                  onChange={(e) => setValues((v) => ({ ...v, [i.id]: Number(e.target.value) }))}
+                  className="w-24 h-10 px-2 rounded-md border border-[#E2E8F0] text-sm text-right tabular-nums" />
+                <div className="w-10 text-[11px] text-[#64748B]">{i.unit}</div>
+              </div>
+            );
+          })}
         </div>
       </div>
       <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
         <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
-        <button disabled={saving || !itemId} onClick={save} className="h-10 px-5 rounded-md bg-[#F59E0B] hover:bg-[#D97706] text-white text-sm font-semibold disabled:opacity-50">Apply</button>
+        <button disabled={saving} onClick={saveAll} className="h-10 px-5 rounded-md bg-[#16A34A] hover:bg-[#15803D] text-white text-sm font-semibold disabled:opacity-50">
+          {saving ? "Saving…" : `Save All Changes${changed.length ? ` (${changed.length})` : ""}`}
+        </button>
       </div>
     </Modal>
   );
 }
+
 
 function LogWasteModal({ items, onClose, onDone }: { items: Item[]; onClose: () => void; onDone: () => void }) {
   const [itemId, setItemId] = useState(items[0]?.id ?? "");
