@@ -8,6 +8,9 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/format";
+import { RecipesTab } from "@/components/inventory/recipes";
+import { ProcurementTab } from "@/components/inventory/procurement";
+import { useLocalList } from "@/components/inventory/ui";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
   component: InventoryPage,
@@ -804,39 +807,3 @@ function ExternalOrderModal({ onClose, onDone }: { onClose: () => void; onDone: 
   );
 }
 
-function AddSupplierModal({ items, onClose, onDone }: { items: Item[]; onClose: () => void; onDone: () => void }) {
-  const [name, setName] = useState(""); const [saving, setSaving] = useState(false);
-  const [assign, setAssign] = useState<Set<string>>(new Set());
-  const save = async () => {
-    if (!name) return toast.error("Supplier name required");
-    setSaving(true);
-    if (assign.size > 0) {
-      const { error } = await supabase.from("inventory_items").update({ supplier: name } as never).in("id", Array.from(assign));
-      setSaving(false);
-      if (error) return toast.error(error.message);
-    } else { setSaving(false); }
-    toast.success(`Supplier "${name}" saved`); onDone(); onClose();
-  };
-  return (
-    <Modal title="Add Supplier" onClose={onClose}>
-      <div className="p-5 space-y-3">
-        <Fld label="Supplier Name"><input value={name} onChange={(e) => setName(e.target.value)} className="w-full h-10 px-3 rounded-md border text-sm" /></Fld>
-        <Fld label="Assign Items (optional)">
-          <div className="max-h-[240px] overflow-y-auto border rounded-md">
-            {items.length === 0 && <div className="p-3 text-sm text-[#64748B]">No items yet</div>}
-            {items.map((i) => (
-              <label key={i.id} className="flex items-center gap-2 px-3 py-2 border-b border-[#F1F5F9] cursor-pointer hover:bg-[#F9FAFB]">
-                <input type="checkbox" checked={assign.has(i.id)} onChange={(e) => setAssign((s) => { const n = new Set(s); e.target.checked ? n.add(i.id) : n.delete(i.id); return n; })} />
-                <span className="text-sm">{i.name}</span><span className="text-xs text-[#64748B] ml-auto">{i.supplier ?? "unassigned"}</span>
-              </label>
-            ))}
-          </div>
-        </Fld>
-      </div>
-      <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-2">
-        <button onClick={onClose} className="h-10 px-4 rounded-md border bg-white text-sm font-semibold">Cancel</button>
-        <button disabled={saving} onClick={save} className="h-10 px-5 rounded-md bg-[#0D9488] hover:bg-[#0B7F75] text-white text-sm font-semibold disabled:opacity-50">Save Supplier</button>
-      </div>
-    </Modal>
-  );
-}
