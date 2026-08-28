@@ -8,6 +8,9 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/format";
+import { RecipesTab } from "@/components/inventory/recipes";
+import { ProcurementTab } from "@/components/inventory/procurement";
+import { useLocalList } from "@/components/inventory/ui";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
   component: InventoryPage,
